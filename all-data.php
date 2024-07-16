@@ -29,7 +29,7 @@ if ($data === null) {
 // 根據'action'的值執行相應的操作
 switch ($action) {
     case 'getAIResults':
-        getAIResults($data['selectedDateRange']);
+        getAIResults($data['selectedCustomer'], $data['selectedDateRange']);
         break;
     case 'getProductById':
         getProductById($data['productId']);
@@ -39,21 +39,29 @@ switch ($action) {
         break;
 }
 
-function getAIResults($selectedDateRange)
+function getAIResults($selectedCustomer, $selectedDateRange)
 {
     global $db_connection;
 
+    $customerCode = $selectedCustomer['CustomerCode'];
     $start_date = $selectedDateRange[0];
     $end_date = $selectedDateRange[1];
 
     $sql = "SELECT * FROM all_2oaoi WHERE Date_1 BETWEEN '$start_date' AND '$end_date'";
+    $sql .= ($customerCode !== 'ALL') ? " AND SUBSTRING(Lot, 3, 2) = '$customerCode'" : "";
     $allproducts = mysqli_query($db_connection, $sql);
 
     if (mysqli_num_rows($allproducts) > 0) {
         $all_products = mysqli_fetch_all($allproducts, MYSQLI_ASSOC);
-        echo json_encode(["success" => 1, "products" => $all_products]);
+        writeLog('getAIResults', 'Success');
+        echo json_encode(["success" => 1, "products" => $all_products, "customerCode" => $customerCode]);
+    } else if (mysqli_num_rows($allproducts) == 0) {
+        $all_products = mysqli_fetch_all($allproducts, MYSQLI_ASSOC);
+        writeLog('getAIResults', 'No Data Found');
+        echo json_encode(["success" => 1, "products" => $all_products, "customerCode" => $customerCode]);
     } else {
-        echo json_encode(["success" => 0, "msg" => "all-data.php沒抓到任何資料"]);
+        writeLog('getAIResults', 'Failure');
+        echo json_encode(["success" => 0, "msg" => "getAIResults Search Product Failure"]);
     }
 }
 
@@ -62,7 +70,7 @@ function getProductById($productId)
     global $db_connection;
 
     if ($productId !== NULL) {
-        $productById = mysqli_query($db_connection, "SELECT * FROM 4b_2oaoi WHERE 4b_2oaoi.lot LIKE '%$productId%'");
+        $productById = mysqli_query($db_connection, "SELECT * FROM all_2oaoi WHERE all_2oaoi.Lot LIKE '%$productId%'");
     }
 
     if (mysqli_num_rows($productById) > 0) {
@@ -75,7 +83,7 @@ function getProductById($productId)
         echo json_encode(["success" => 1, "products" => $product_byId], JSON_UNESCAPED_UNICODE);
     } else {
         writeLog('getProductById', 'Failure');
-        echo json_encode(["success" => 0, "msg" => "Search Product Failure"]);
+        echo json_encode(["success" => 0, "msg" => "getProductById Search Product Failure"]);
     }
 }
 
