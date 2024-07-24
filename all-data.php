@@ -1,6 +1,6 @@
 <?php
-// DB connection: $db_connection from db_connection.php
-require 'db_connection.php';
+require_once 'db_connection.php';
+require_once 'config.php';
 
 date_default_timezone_set("Asia/Taipei");
 header("Access-Control-Allow-Origin: *");
@@ -33,6 +33,9 @@ switch ($action) {
         break;
     case 'getProductById':
         getProductById($data['productId']);
+        break;
+    case 'mailAlert':
+        mailAlert();
         break;
     default:
         echo json_encode(["success" => 0, "msg" => "無對應action: '$action'"]);
@@ -84,6 +87,35 @@ function getProductById($productId)
     } else {
         writeLog('getProductById', 'Failure');
         echo json_encode(["success" => 0, "msg" => "getProductById Search Product Failure"]);
+    }
+}
+
+function mailAlert()
+{
+    global $config;
+
+    $to = "AndyZT_Hsieh@aseglobal.com";
+    $subject = "2/O AOI DashBoard 寄信測試";
+    $txt = "寄信成功!";
+    $headers = "From: ASE-WB-2OAOI@aseglobal.com" . "\r\n" .
+        "CC:" . "\r\n" .
+        "Content-Type: text/plain; charset=UTF-8" . "\r\n" .
+        "Content-Transfer-Encoding: 8bit";
+
+    // 從設定檔讀取郵件伺服器地址和端口號
+    ini_set("SMTP", $config['smtp_server']);
+    ini_set("smtp_port", $config['smtp_port']);
+
+    // 發送郵件
+    $mailResult = mb_send_mail($to, $subject, $txt, $headers, 'UTF-8');
+
+    if ($mailResult) {
+        writeLog('mailAlert', 'Success');
+        echo "郵件已成功發送";
+    } else {
+        $error = error_get_last();
+        writeLog('mailAlert', 'Failure');
+        echo "發送郵件失敗：{$error['message']}";
     }
 }
 
