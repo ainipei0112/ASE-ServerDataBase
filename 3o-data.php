@@ -14,17 +14,18 @@ $data = json_decode(file_get_contents('php://input'), true);
 
 // 檢查是否成功解析JSON資料
 if ($data === null) {
-    // 處理JSON解析失敗的情況
     echo "Failed to parse JSON data";
-} else {
-    // 檢查是否存在'action'鍵
-    if (isset($data['action'])) {
-        // 取得'action'的值
-        $action = $data['action'];
-    } else {
-        echo "Missing 'action' key";
-    }
+    exit;
 }
+
+// 檢查是否存在'action'
+if (!isset($data['action'])) {
+    echo "Missing 'action' key";
+    exit;
+}
+
+// 取得'action'的值
+$action = $data['action'];
 
 // 根據'action'的值執行相應的操作
 switch ($action) {
@@ -36,6 +37,7 @@ switch ($action) {
         break;
 }
 
+// 取得3OAOI資料
 function get3oaoidata()
 {
     global $db_connection;
@@ -43,18 +45,17 @@ function get3oaoidata()
     $sql = "SELECT * FROM all_3oaoi";
     $allproducts = mysqli_query($db_connection, $sql);
 
-    if (mysqli_num_rows($allproducts) > 0) {
-        $all_products = mysqli_fetch_all($allproducts, MYSQLI_ASSOC);
-        writeLog('get3oaoidata', 'Success');
-        echo json_encode(["success" => 1, "products" => $all_products]);
-    } else if (mysqli_num_rows($allproducts) == 0) {
-        $all_products = mysqli_fetch_all($allproducts, MYSQLI_ASSOC);
-        writeLog('get3oaoidata', 'No Data Found');
-        echo json_encode(["success" => 1, "products" => $all_products]);
-    } else {
+    // 檢查查詢是否成功
+    if ($allproducts === false) {
         writeLog('get3oaoidata', 'Failure');
         echo json_encode(["success" => 0, "msg" => "get3oaoidata Search Product Failure"]);
+        return;
     }
+
+    $all_products = mysqli_fetch_all($allproducts, MYSQLI_ASSOC);
+
+    writeLog('get3oaoidata', mysqli_num_rows($allproducts) > 0 ? 'Success' : 'No Data Found');
+    echo json_encode(["success" => 1, "products" => $all_products]);
 }
 
 function writeLog($action, $status)
