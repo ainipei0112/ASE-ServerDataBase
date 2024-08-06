@@ -1,6 +1,11 @@
 <?php
-require_once 'db_connection.php';
-require_once 'config.php';
+// 連接到 SQLite 資料庫
+$db_connection = new SQLite3('qv/qv.sqlite');
+
+// 檢查資料庫連接
+if (!$db_connection) {
+    echo $db_connection->lastErrorMsg();
+}
 
 date_default_timezone_set("Asia/Taipei");
 header("Access-Control-Allow-Origin: *");
@@ -42,8 +47,8 @@ function get3oaoidata()
 {
     global $db_connection;
 
-    $sql = "SELECT * FROM all_3oaoi";
-    $allproducts = mysqli_query($db_connection, $sql);
+    $sql = "SELECT * FROM stripData";
+    $allproducts = $db_connection->query($sql);
 
     // 檢查查詢是否成功
     if ($allproducts === false) {
@@ -52,9 +57,12 @@ function get3oaoidata()
         return;
     }
 
-    $all_products = mysqli_fetch_all($allproducts, MYSQLI_ASSOC);
-
-    writeLog('get3oaoidata', mysqli_num_rows($allproducts) > 0 ? 'Success' : 'No Data Found');
+    // 輸出查詢結果
+    $all_products = [];
+    while ($row = $allproducts->fetchArray()) {
+        $all_products[] = ["Strip_No" => $row['strip_no'], "Drawing_No" => $row['drawing_no'], "Ao_Info_Machine_Id" => $row['machine_id']];
+    }
+    writeLog('get3oaoidata', count($all_products) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(["success" => 1, "products" => $all_products]);
 }
 
