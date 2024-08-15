@@ -60,7 +60,16 @@ function get3oaoidata() {
     // 輸出查詢結果
     $results = [];
     while ($row = $allProducts->fetchArray()) {
-        $results[] = ['Strip_No' => $row['strip_no'], 'Drawing_No' => $row['drawing_no'], 'Machine_Id' => $row['machine_id']];
+        $results[] = [
+            'Strip_No' => $row['strip_no'],
+            'Drawing_No' => $row['drawing_no'],
+            'Machine_Id' => $row['machine_id'],
+            'Fail_Ppm' => $row['fail_ppm'],
+            'Pass_Rate' => $row['pass_rate'],
+            'Overkill_Rate' => $row['overkill_rate'],
+            'Ao_Time_Start' => $row['ao_time_start'],
+            'Device_Id' => $row['device_id']
+        ];
     }
     writeLog('get3oaoidata', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
