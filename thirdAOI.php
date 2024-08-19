@@ -38,6 +38,9 @@ switch ($action) {
     case 'get3oaoidata':
         get3oaoidata();
         break;
+    case 'searchByDrawingNo':
+        searchByDrawingNo($data['drawingNo']);
+        break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
         break;
@@ -48,18 +51,24 @@ function get3oaoidata() {
     global $dbConn;
 
     $sql = "SELECT * FROM stripData";
-    $allProducts = $dbConn->query($sql);
+    $stmt = $dbConn->prepare($sql);
+    if (!$stmt) {
+        writeLog('get3oaoidata', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
+        return;
+    }
+    $result = $stmt->execute();
 
     // 檢查查詢是否成功
-    if ($allProducts === false) {
-        writeLog('get3oaoidata', 'Failure');
+    if (!$result) {
+        writeLog('get3oaoidata', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'get3oaoidata Search Product Failure']);
         return;
     }
 
     // 輸出查詢結果
     $results = [];
-    while ($row = $allProducts->fetchArray()) {
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
         $results[] = [
             'Strip_No' => $row['strip_no'],
             'Drawing_No' => $row['drawing_no'],
@@ -72,6 +81,46 @@ function get3oaoidata() {
         ];
     }
     writeLog('get3oaoidata', count($results) > 0 ? 'Success' : 'No Data Found');
+    echo json_encode(['success' => 1, 'results' => $results]);
+}
+
+// 根據Drawing_No查詢資料
+function searchByDrawingNo($drawingNo) {
+    global $dbConn;
+
+    $sql = "SELECT * FROM stripData WHERE drawing_no LIKE :drawingNo";
+    $stmt = $dbConn->prepare($sql);
+    if (!$stmt) {
+        writeLog('searchByDrawingNo', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
+        return;
+    }
+    $stmt->bindValue(':drawingNo', $drawingNo, SQLITE3_TEXT);
+    $result = $stmt->execute();
+
+    // 檢查查詢執行是否成功
+    if (!$result) {
+        writeLog('searchByDrawingNo', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Search by Drawing No Failure']);
+        return;
+    }
+
+    // 輸出查詢結果
+    $results = [];
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $results[] = [
+            'Strip_No' => $row['strip_no'],
+            'Drawing_No' => $row['drawing_no'],
+            'Machine_Id' => $row['machine_id'],
+            'Fail_Ppm' => $row['fail_ppm'],
+            'Pass_Rate' => $row['pass_rate'],
+            'Overkill_Rate' => $row['overkill_rate'],
+            'Ao_Time_Start' => $row['ao_time_start'],
+            'Device_Id' => $row['device_id']
+        ];
+    }
+
+    writeLog('searchByDrawingNo', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
