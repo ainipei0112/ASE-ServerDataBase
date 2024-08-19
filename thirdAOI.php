@@ -38,8 +38,8 @@ switch ($action) {
     case 'get3oaoidata':
         get3oaoidata();
         break;
-    case 'searchByDrawingNo':
-        searchByDrawingNo($data['drawingNo']);
+    case 'getDataByCondition':
+        getDataByCondition($data['drawingNo'], $data['machineId']);
         break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
@@ -84,23 +84,31 @@ function get3oaoidata() {
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
-// 根據Drawing_No查詢資料
-function searchByDrawingNo($drawingNo) {
+// 根據條件查詢資料
+function getDataByCondition($drawingNo, $machineId) {
     global $dbConn;
 
-    $sql = "SELECT * FROM stripData WHERE drawing_no LIKE :drawingNo";
+    $sql = "SELECT * FROM stripData WHERE 1 = 1";
+    // 檢查條件是否為 NULL
+    if ($drawingNo !== null) {
+        $sql .= " AND drawing_no = :drawingNo";
+    }
+    if ($machineId !== null) {
+        $sql .= " AND machine_id = :machineId";
+    }
     $stmt = $dbConn->prepare($sql);
     if (!$stmt) {
-        writeLog('searchByDrawingNo', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        writeLog('getDataByCondition', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
         return;
     }
     $stmt->bindValue(':drawingNo', $drawingNo, SQLITE3_TEXT);
+    $stmt->bindValue(':machineId', $machineId, SQLITE3_TEXT);
     $result = $stmt->execute();
 
     // 檢查查詢執行是否成功
     if (!$result) {
-        writeLog('searchByDrawingNo', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
+        writeLog('getDataByCondition', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'Search by Drawing No Failure']);
         return;
     }
@@ -120,7 +128,7 @@ function searchByDrawingNo($drawingNo) {
         ];
     }
 
-    writeLog('searchByDrawingNo', count($results) > 0 ? 'Success' : 'No Data Found');
+    writeLog('getDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
@@ -130,9 +138,5 @@ function writeLog($action, $status) {
     $currentTime = date('H:i:s');
     $userIP = $_SERVER['REMOTE_ADDR'] . '：';
     $logMessage = "$currentTime $action $status" . PHP_EOL;
-
-    // 使用 fopen() 寫入檔案
-    $fp = fopen($logFile, 'a');
-    fwrite($fp, $userIP . $logMessage);
-    fclose($fp);
+    file_put_contents($logFile, $userIP . $logMessage, FILE_APPEND);
 }
