@@ -41,6 +41,9 @@ switch ($action) {
     case 'getDataByCondition':
         getDataByCondition($data['drawingNo'], $data['machineId']);
         break;
+    case 'exportDataByCondition':
+        exportDataByCondition($data['drawingNo'], $data['machineId']);
+        break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
         break;
@@ -86,6 +89,54 @@ function get3oaoidata() {
 
 // 根據條件查詢資料
 function getDataByCondition($drawingNo, $machineId) {
+    global $dbConn;
+
+    $sql = "SELECT * FROM stripData WHERE 1 = 1";
+    // 檢查條件是否為 NULL
+    if ($drawingNo !== null) {
+        $sql .= " AND drawing_no = :drawingNo";
+    }
+    if ($machineId !== null) {
+        $sql .= " AND machine_id = :machineId";
+    }
+    $stmt = $dbConn->prepare($sql);
+    if (!$stmt) {
+        writeLog('getDataByCondition', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
+        return;
+    }
+    $stmt->bindValue(':drawingNo', $drawingNo, SQLITE3_TEXT);
+    $stmt->bindValue(':machineId', $machineId, SQLITE3_TEXT);
+    $result = $stmt->execute();
+
+    // 檢查查詢執行是否成功
+    if (!$result) {
+        writeLog('getDataByCondition', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Search by Drawing No Failure']);
+        return;
+    }
+
+    // 輸出查詢結果
+    $results = [];
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $results[] = [
+            'Strip_No' => $row['strip_no'],
+            'Drawing_No' => $row['drawing_no'],
+            'Machine_Id' => $row['machine_id'],
+            'Fail_Ppm' => $row['fail_ppm'],
+            'Pass_Rate' => $row['pass_rate'],
+            'Overkill_Rate' => $row['overkill_rate'],
+            'Ao_Time_Start' => $row['ao_time_start'],
+            'Device_Id' => $row['device_id']
+        ];
+    }
+
+    writeLog('getDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+    echo json_encode(['success' => 1, 'results' => $results]);
+}
+
+// 根據條件匯出資料
+function exportDataByCondition($drawingNo, $machineId) {
     global $dbConn;
 
     $sql = "SELECT * FROM stripData WHERE 1 = 1";
