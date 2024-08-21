@@ -9,6 +9,8 @@ header('Access-Control-Allow-Methods: GET');
 header('Content-Type: application/json; charset=UTF-8');
 header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With');
 
+session_start();
+
 // 讀取前端傳送過來的JSON資料(F12->網路->酬載)
 $data = json_decode(file_get_contents('php://input'), true);
 
@@ -26,6 +28,9 @@ if ($data === null) {
     }
 }
 
+// 更新訪客計數
+updateVisitorCount();
+
 // 根據'action'的值執行相應的操作
 switch ($action) {
     case 'getAIResults':
@@ -34,12 +39,50 @@ switch ($action) {
     case 'getProductById':
         getProductById($data['productId']);
         break;
-    case 'mailAlert':
-        mailAlert();
+    case 'getMailAlert':
+        getMailAlert();
+        break;
+    case 'getVisitorCount':
+        getVisitorCount();
         break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
         break;
+}
+
+function updateVisitorCount() {
+    global $dbConn;
+
+    $currentDate = date('Y-m-d');
+    $currentTime = date('H:i:s');
+    $userIP = $_SERVER['REMOTE_ADDR'];
+
+    // 檢查 session 中是否已經記錄了當天的訪客
+    if (!isset($_SESSION['visited']) || $_SESSION['visited'] !== $currentDate) {
+        // ON DUPLICATE KEY UPDATE 判別 VALUES 插入的資料是否已經存在，如果存在則更新，不存在則插入。
+        $sql = "INSERT INTO 2o_visitor_count (visit_date, visit_time, ip_address, count)
+                VALUES ('$currentDate', '$currentTime', '$userIP', 1)
+                ON DUPLICATE KEY UPDATE count = count + 1";
+        mysqli_query($dbConn, $sql);
+
+        // 設定 session 記錄當天已訪問
+        $_SESSION['visited'] = $currentDate;
+    }
+}
+
+function getVisitorCount() {
+    global $dbConn;
+
+    $currentDate = date('Y-m-d');
+    $sql = "SELECT count FROM 2o_visitor_count WHERE visit_date = '$currentDate'";
+    $result = mysqli_query($dbConn, $sql);
+    $count = 0;
+
+    if ($result && mysqli_num_rows($result) > 0) {
+        $row = mysqli_fetch_assoc($result);
+        $count = $row['count'];
+    }
+    echo json_encode(['success' => 1, 'count' => $count]);
 }
 
 function getAIResults($selectedCustomer, $selectedDateRange) {
@@ -88,7 +131,7 @@ function getProductById($productId) {
     }
 }
 
-function mailAlert() {
+function getMailAlert() {
     global $config;
 
     $to = "AndyZT_Hsieh@aseglobal.com";
@@ -107,11 +150,11 @@ function mailAlert() {
     $mailResult = mb_send_mail($to, $subject, $txt, $headers, 'UTF-8');
 
     if ($mailResult) {
-        writeLog('mailAlert', 'Success');
+        writeLog('getMailAlert', 'Success');
         echo "郵件已成功發送";
     } else {
         $error = error_get_last();
-        writeLog('mailAlert', 'Failure');
+        writeLog('getMailAlert', 'Failure');
         echo "發送郵件失敗：{$error['message']}";
     }
 }
