@@ -28,9 +28,6 @@ if ($data === null) {
     }
 }
 
-// 更新訪客計數
-updateVisitorCount();
-
 // 根據'action'的值執行相應的操作
 switch ($action) {
     case 'getAIResults':
@@ -43,6 +40,7 @@ switch ($action) {
         getMailAlert();
         break;
     case 'getVisitorCount':
+        updateVisitorCount(); // 更新訪客計數
         getVisitorCount();
         break;
     default:
@@ -54,19 +52,27 @@ function updateVisitorCount() {
     global $dbConn;
 
     $currentDate = date('Y-m-d');
-    $currentTime = date('H:i:s');
     $userIP = $_SERVER['REMOTE_ADDR'];
 
-    // 檢查 session 中是否已經記錄了當天的訪客
-    if (!isset($_SESSION['visited']) || $_SESSION['visited'] !== $currentDate) {
-        // ON DUPLICATE KEY UPDATE 判別 VALUES 插入的資料是否已經存在，如果存在則更新，不存在則插入。
-        $sql = "INSERT INTO 2o_visitor_count (visit_date, visit_time, ip_address, count)
-                VALUES ('$currentDate', '$currentTime', '$userIP', 1)
-                ON DUPLICATE KEY UPDATE count = count + 1";
-        mysqli_query($dbConn, $sql);
+    // 檢查是否已經存在當天的記錄，並且該 IP 是否已被計數
+    $checkSql = "SELECT *
+                FROM 2o_visitor_count
+                WHERE visit_date = '$currentDate'
+                AND FIND_IN_SET('$userIP', ip_address)";
+    $result = mysqli_query($dbConn, $checkSql);
 
-        // 設定 session 記錄當天已訪問
-        $_SESSION['visited'] = $currentDate;
+    // 如果不存在記錄或該 IP 尚未被計數
+    if (mysqli_num_rows($result) == 0) {
+        $updateSql = "INSERT INTO 2o_visitor_count (visit_date, ip_address, count)
+                      VALUES ('$currentDate', '$userIP', 1)
+                      ON DUPLICATE KEY UPDATE
+                      count = count + 1,
+                      ip_address = CONCAT(ip_address, ',$userIP')";
+        mysqli_query($dbConn, $updateSql);
+
+        writeLog('updateVisitorCount', "Success - New visitor");
+    } else {
+        writeLog('updateVisitorCount', "Skipped - Visitor already counted");
     }
 }
 
@@ -76,12 +82,7 @@ function getVisitorCount() {
     $currentDate = date('Y-m-d');
     $sql = "SELECT count FROM 2o_visitor_count WHERE visit_date = '$currentDate'";
     $result = mysqli_query($dbConn, $sql);
-    $count = 0;
-
-    if ($result && mysqli_num_rows($result) > 0) {
-        $row = mysqli_fetch_assoc($result);
-        $count = $row['count'];
-    }
+    $count = ($result && mysqli_num_rows($result) > 0) ? mysqli_fetch_assoc($result)['count'] : 0;
     echo json_encode(['success' => 1, 'count' => $count]);
 }
 
@@ -148,15 +149,8 @@ function getMailAlert() {
 
     // 發送郵件
     $mailResult = mb_send_mail($to, $subject, $txt, $headers, 'UTF-8');
-
-    if ($mailResult) {
-        writeLog('getMailAlert', 'Success');
-        echo "郵件已成功發送";
-    } else {
-        $error = error_get_last();
-        writeLog('getMailAlert', 'Failure');
-        echo "發送郵件失敗：{$error['message']}";
-    }
+    writeLog('getMailAlert', $mailResult ? 'Success' : 'Failure');
+    echo $mailResult ? "郵件已成功發送" : "發送郵件失敗";
 }
 
 function writeLog($action, $status) {
@@ -166,9 +160,5 @@ function writeLog($action, $status) {
     $logFile = LOG_FILE_PATH  . $currentDate . '.txt'; // 使用 UNC 路徑
     $userIP = $_SERVER['REMOTE_ADDR'] . "：";
     $logMessage = "$currentTime $action $status " . PHP_EOL;
-
-    // 使用 fopen() 寫入檔案
-    $fp = fopen($logFile, 'a');
-    fwrite($fp, $userIP . $logMessage);
-    fclose($fp);
+    file_put_contents($logFile, $userIP . $logMessage, FILE_APPEND);
 }

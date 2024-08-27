@@ -112,7 +112,7 @@ function getDataByCondition($drawingNo, $machineId) {
     // 檢查查詢執行是否成功
     if (!$result) {
         writeLog('getDataByCondition', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
-        echo json_encode(['success' => 0, 'msg' => 'Search by Drawing No Failure']);
+        echo json_encode(['success' => 0, 'msg' => 'Search by Condition Failure']);
         return;
     }
 
@@ -126,6 +126,9 @@ function getDataByCondition($drawingNo, $machineId) {
             'Fail_Ppm' => $row['fail_ppm'],
             'Pass_Rate' => $row['pass_rate'],
             'Overkill_Rate' => $row['overkill_rate'],
+            'Fail_Count' => $row['fail_count'],
+            'Pass_Count' => $row['pass_count'],
+            'Aoi_Defect' => $row['aoi_defect'],
             'Ao_Time_Start' => $row['ao_time_start'],
             'Device_Id' => $row['device_id']
         ];
@@ -168,6 +171,7 @@ function exportDataByCondition($drawingNo, $machineId) {
     $results = [];
     while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
         $results[] = [
+            'Lot_No' => $row['lot_no'],
             'Strip_No' => $row['strip_no'],
             'Drawing_No' => $row['drawing_no'],
             'Machine_Id' => $row['machine_id'],
