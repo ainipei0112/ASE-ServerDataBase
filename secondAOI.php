@@ -43,11 +43,15 @@ switch ($action) {
         updateVisitorCount(); // 更新訪客計數
         getVisitorCount();
         break;
+    case 'uploadExcel':
+        uploadExcel();
+        break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
         break;
 }
 
+// 更新瀏覽人次
 function updateVisitorCount() {
     global $dbConn;
 
@@ -76,8 +80,23 @@ function updateVisitorCount() {
     }
 }
 
+// 查詢瀏覽人次
 function getVisitorCount() {
     global $dbConn;
+
+    // $adAccount = isset($_SERVER['AUTH_USER']) ? $_SERVER['AUTH_USER'] : 'Unknown User';
+    // echo $adAccount;
+    // var_dump($_SERVER);
+    // if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+    //     $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
+    //     list($username, $password) = explode(':', base64_decode(substr($authHeader, 6)));
+    //     echo "Username: " . $username;
+    //     echo "Password: " . $password;
+    // } elseif (isset($_SERVER['HTTP_PROXY_AUTH'])) {
+    //     $proxyAuthHeader = $_SERVER['HTTP_PROXY_AUTH'];
+    // } else {
+    //     echo "No proxy credentials found.";
+    // }
 
     $currentDate = date('Y-m-d');
     $sql = "SELECT count FROM 2o_visitor_count WHERE visit_date = '$currentDate'";
@@ -85,6 +104,7 @@ function getVisitorCount() {
     $count = ($result && mysqli_num_rows($result) > 0) ? mysqli_fetch_assoc($result)['count'] : 0;
     echo json_encode(['success' => 1, 'count' => $count]);
 }
+
 
 function getAIResults($selectedCustomer, $selectedDateRange) {
     global $dbConn;
@@ -132,6 +152,7 @@ function getProductById($productId) {
     }
 }
 
+// 信件派送
 function getMailAlert() {
     global $config;
 
@@ -151,6 +172,41 @@ function getMailAlert() {
     $mailResult = mb_send_mail($to, $subject, $txt, $headers, 'UTF-8');
     writeLog('getMailAlert', $mailResult ? 'Success' : 'Failure');
     echo $mailResult ? "郵件已成功發送" : "發送郵件失敗";
+}
+
+// 上傳Excel寫入資料庫
+function uploadExcel() {
+    global $dbConn;
+
+    // 讀取 JSON 數據
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    if (!isset($data['data'])) {
+        echo json_encode(['success' => 0, 'msg' => 'No data received']);
+        return;
+    }
+
+    $rows = $data['data'];
+    foreach ($rows as $index => $row) {
+        if ($index == 0) {
+            continue; // 跳過標題行
+        }
+
+        // 假設你的資料庫有 visit_date, ip_address 和 count 欄位
+        $visit_date = mysqli_real_escape_string($dbConn, $row[0]); // 假設第一列為 visit_date
+        $ip_address = mysqli_real_escape_string($dbConn, $row[1]); // 假設第二列為 ip_address
+        $count = (int)$row[2]; // 假設第三列為 count
+
+        $sql = "INSERT INTO 2o_visitor_count (visit_date, ip_address, count)
+                VALUES ('$visit_date', '$ip_address', $count)
+                ON DUPLICATE KEY UPDATE
+                ip_address = CONCAT(ip_address, ',$ip_address'),
+                count = count + $count";
+
+        mysqli_query($dbConn, $sql);
+    }
+
+    echo json_encode(['success' => 1, 'msg' => '檔案上傳並寫入資料庫成功！']);
 }
 
 function writeLog($action, $status) {
