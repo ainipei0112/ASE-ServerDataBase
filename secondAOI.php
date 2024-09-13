@@ -9,7 +9,9 @@ header('Access-Control-Allow-Methods: GET');
 header('Content-Type: application/json; charset=UTF-8');
 header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With');
 
-session_start();
+// echo 'get_current_user: ' . get_current_user() . "\n";
+// echo 'exec user: ' . exec('whoami') . "\n";
+// var_dump($_SERVER);
 
 // 讀取前端傳送過來的JSON資料(F12->網路->酬載)
 $data = json_decode(file_get_contents('php://input'), true);
@@ -30,14 +32,17 @@ if ($data === null) {
 
 // 根據'action'的值執行相應的操作
 switch ($action) {
+    case 'userLogin':
+        userLogin($data['userData']);
+        break;
     case 'getAIResults':
         getAIResults($data['selectedCustomer'], $data['selectedDateRange']);
         break;
     case 'getProductById':
         getProductById($data['productId']);
         break;
-    case 'getMailAlert':
-        getMailAlert();
+    case 'mailAlert':
+        mailAlert();
         break;
     case 'getVisitorCount':
         updateVisitorCount(); // 更新訪客計數
@@ -49,6 +54,85 @@ switch ($action) {
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
         break;
+}
+
+// function userLogin($userData) {
+//     global $dbConn;
+
+//     if ($userData !== NULL) {
+//         $empId = $userData["empId"];
+//         $userById = mysqli_query($dbConn, "SELECT * FROM employee_datas WHERE Emp_ID = '$empId'");
+//     }
+
+//     if ($userById && mysqli_num_rows($userById) > 0) {
+//         $userDatas = mysqli_fetch_all($userById, MYSQLI_ASSOC);
+//         writeLog('userLogin', 'Success');
+//         echo json_encode(['success' => 1, 'userDatas' => $userDatas], JSON_UNESCAPED_UNICODE);
+//     } else if ($userById && mysqli_num_rows($userById) == 0) {
+//         writeLog('userLogin', 'No Data Found');
+//         echo json_encode(['success' => 1, 'userDatas' => []], JSON_UNESCAPED_UNICODE);
+//     } else {
+//         writeLog('userLogin', 'Failure');
+//         echo json_encode(['success' => 0, 'msg' => 'User Login Failure']);
+//     }
+// }
+
+// LDAP登入
+function userLogin($userData) {
+    // Active Directory 伺服器資訊
+    $ldap_host = "ldap://KHADDC04.kh.asegroup.com";
+    $ldap_dn = "DC=kh,DC=asegroup,DC=com";
+    $ldap_user = "kh\\" . $userData["empId"];
+    $ldap_password = $userData["password"];
+    $username = $userData["empId"];
+
+    // 建立 LDAP 連接
+    $ldap_conn = ldap_connect($ldap_host);
+
+    if ($ldap_conn) {
+        ldap_set_option($ldap_conn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        ldap_set_option($ldap_conn, LDAP_OPT_REFERRALS, 0);
+
+        $bind = ldap_bind($ldap_conn, $ldap_user, $ldap_password);
+
+        if ($bind) {
+            // 使用 sAMAccountName 進行搜尋
+            $result = ldap_search($ldap_conn, $ldap_dn, "(sAMAccountName=$username)", ["sAMAccountName", "displayName", "department", "title", "telephonenumber", "mail"]);
+
+            if (!$result) {
+                writeLog('userLogin', 'No Data Found');
+                echo json_encode(['success' => 1, 'userDatas' => []], JSON_UNESCAPED_UNICODE);
+            } else {
+                $entries = ldap_get_entries($ldap_conn, $result);
+
+                if ($entries['count'] > 0) {
+                    $userDatas = [
+                        [
+                            "Emp_ID" => isset($entries[0]['samaccountname'][0]) ? $entries[0]['samaccountname'][0] : '無',
+                            "Emp_Name" => isset($entries[0]['displayname'][0]) ? $entries[0]['displayname'][0] : '無',
+                            "Job_Title" => isset($entries[0]['title'][0]) ? $entries[0]['title'][0] : '無',
+                            "Dept_Name" => isset($entries[0]['department'][0]) ? $entries[0]['department'][0] : '無',
+                            "Phone_Number" => isset($entries[0]['telephonenumber'][0]) ? $entries[0]['telephonenumber'][0] : '無',
+                            "E_Mail" => isset($entries[0]['mail'][0]) ? $entries[0]['mail'][0] : '無',
+                        ]
+                    ];
+
+                    writeLog('userLogin', 'Success');
+                    echo json_encode(['success' => 1, 'userDatas' => $userDatas], JSON_UNESCAPED_UNICODE);
+                } else {
+                    writeLog('userLogin', 'Failure');
+                    echo json_encode(['success' => 0, 'msg' => '找不到使用者。'], JSON_UNESCAPED_UNICODE);
+                }
+            }
+        } else {
+            writeLog('userLogin', 'Failure');
+            echo json_encode(['success' => 0, 'msg' => 'User Login Failure'], JSON_UNESCAPED_UNICODE);
+        }
+
+        ldap_unbind($ldap_conn);
+    } else {
+        echo json_encode(['success' => 0, 'msg' => '無法連接到 LDAP 伺服器。'], JSON_UNESCAPED_UNICODE);
+    }
 }
 
 // 更新瀏覽人次
@@ -105,7 +189,6 @@ function getVisitorCount() {
     echo json_encode(['success' => 1, 'count' => $count]);
 }
 
-
 function getAIResults($selectedCustomer, $selectedDateRange) {
     global $dbConn;
 
@@ -153,7 +236,7 @@ function getProductById($productId) {
 }
 
 // 信件派送
-function getMailAlert() {
+function mailAlert() {
     global $config;
 
     $to = "AndyZT_Hsieh@aseglobal.com";
@@ -170,7 +253,7 @@ function getMailAlert() {
 
     // 發送郵件
     $mailResult = mb_send_mail($to, $subject, $txt, $headers, 'UTF-8');
-    writeLog('getMailAlert', $mailResult ? 'Success' : 'Failure');
+    writeLog('mailAlert', $mailResult ? 'Success' : 'Failure');
     echo $mailResult ? "郵件已成功發送" : "發送郵件失敗";
 }
 
