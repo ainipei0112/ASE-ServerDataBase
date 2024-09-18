@@ -2,6 +2,7 @@
 
 // 連接 SQLite 資料庫
 $dbConn = new SQLite3('qv/qv.sqlite');
+require_once 'config.php';
 
 // 檢查資料庫連接
 if (!$dbConn) {
@@ -43,6 +44,9 @@ switch ($action) {
         break;
     case 'exportDataByCondition':
         exportDataByCondition($data['drawingNo'], $data['machineId']);
+        break;
+    case 'mailAlert':
+        mailAlert($data['emailData']);
         break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
@@ -185,6 +189,28 @@ function exportDataByCondition($drawingNo, $machineId) {
 
     writeLog('getDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
+}
+
+// 信件派送
+function mailAlert($emailData) {
+    global $config;
+
+    $to = $emailData['recipient'];
+    $subject = $emailData['subject'];
+    $txt = $emailData['content'];
+
+    $headers = "From: ASE-WB-3OAOI@aseglobal.com" . "\r\n" .
+        "CC:" . "\r\n" .
+        "MIME-Version: 1.0" . "\r\n" .
+        "Content-Type: text/html; charset=UTF-8" . "\r\n" .
+        "Content-Transfer-Encoding: 8bit";
+
+    ini_set("SMTP", $config['smtp_server']);
+    ini_set("smtp_port", $config['smtp_port']);
+
+    $mailResult = mb_send_mail($to, $subject, $txt, $headers, 'UTF-8');
+    writeLog('mailAlert', $mailResult ? 'Success' : 'Failure');
+    echo json_encode(['success' => $mailResult, 'message' => $mailResult ? "郵件已成功發送" : "發送郵件失敗"]);
 }
 
 function writeLog($action, $status) {
