@@ -9,10 +9,6 @@ header('Access-Control-Allow-Methods: GET');
 header('Content-Type: application/json; charset=UTF-8');
 header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With');
 
-// echo 'get_current_user: ' . get_current_user() . "\n";
-// echo 'exec user: ' . exec('whoami') . "\n";
-// var_dump($_SERVER);
-
 // 讀取前端傳送過來的JSON資料(F12->網路->酬載)
 $data = json_decode(file_get_contents('php://input'), true);
 
@@ -45,7 +41,6 @@ switch ($action) {
         mailAlert();
         break;
     case 'getVisitorCount':
-        updateVisitorCount(); // 更新訪客計數
         getVisitorCount();
         break;
     case 'uploadExcel':
@@ -56,54 +51,33 @@ switch ($action) {
         break;
 }
 
-// function userLogin($userData) {
-//     global $dbConn;
-
-//     if ($userData !== NULL) {
-//         $empId = $userData["empId"];
-//         $userById = mysqli_query($dbConn, "SELECT * FROM employee_datas WHERE Emp_ID = '$empId'");
-//     }
-
-//     if ($userById && mysqli_num_rows($userById) > 0) {
-//         $userDatas = mysqli_fetch_all($userById, MYSQLI_ASSOC);
-//         writeLog('userLogin', 'Success');
-//         echo json_encode(['success' => 1, 'userDatas' => $userDatas], JSON_UNESCAPED_UNICODE);
-//     } else if ($userById && mysqli_num_rows($userById) == 0) {
-//         writeLog('userLogin', 'No Data Found');
-//         echo json_encode(['success' => 1, 'userDatas' => []], JSON_UNESCAPED_UNICODE);
-//     } else {
-//         writeLog('userLogin', 'Failure');
-//         echo json_encode(['success' => 0, 'msg' => 'User Login Failure']);
-//     }
-// }
-
 // LDAP登入
 function userLogin($userData) {
     // Active Directory 伺服器資訊
-    $ldap_host = "ldap://KHADDC04.kh.asegroup.com";
-    $ldap_dn = "DC=kh,DC=asegroup,DC=com";
-    $ldap_user = "kh\\" . $userData["empId"];
-    $ldap_password = $userData["password"];
-    $username = $userData["empId"];
+    $empId = $userData["empId"];
+    $ldapHost = "ldap://KHADDC04.kh.asegroup.com";
+    $ldapDn = "DC=kh,DC=asegroup,DC=com";
+    $ldapUser = "kh\\" . $empId;
+    $ldapPassword = $userData["password"];
 
     // 建立 LDAP 連接
-    $ldap_conn = ldap_connect($ldap_host);
+    $ldapConn = ldap_connect($ldapHost);
 
-    if ($ldap_conn) {
-        ldap_set_option($ldap_conn, LDAP_OPT_PROTOCOL_VERSION, 3);
-        ldap_set_option($ldap_conn, LDAP_OPT_REFERRALS, 0);
+    if ($ldapConn) {
+        ldap_set_option($ldapConn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        ldap_set_option($ldapConn, LDAP_OPT_REFERRALS, 0);
 
-        $bind = ldap_bind($ldap_conn, $ldap_user, $ldap_password);
+        $bind = ldap_bind($ldapConn, $ldapUser, $ldapPassword);
 
         if ($bind) {
             // 使用 sAMAccountName 進行搜尋
-            $result = ldap_search($ldap_conn, $ldap_dn, "(sAMAccountName=$username)", ["sAMAccountName", "displayName", "department", "title", "telephonenumber", "mail"]);
+            $result = ldap_search($ldapConn, $ldapDn, "(sAMAccountName=$empId)", ["sAMAccountName", "displayName", "department", "title", "telephonenumber", "mail"]);
 
             if (!$result) {
                 writeLog('userLogin', 'No Data Found');
                 echo json_encode(['success' => 1, 'userDatas' => []], JSON_UNESCAPED_UNICODE);
             } else {
-                $entries = ldap_get_entries($ldap_conn, $result);
+                $entries = ldap_get_entries($ldapConn, $result);
 
                 if ($entries['count'] > 0) {
                     $userDatas = [
@@ -117,50 +91,61 @@ function userLogin($userData) {
                         ]
                     ];
 
-                    writeLog('userLogin', 'Success');
+                    updateVisitorCount($empId); // 更新訪客計數
+                    writeLog('userLogin', "Success: $empId");
                     echo json_encode(['success' => 1, 'userDatas' => $userDatas], JSON_UNESCAPED_UNICODE);
                 } else {
-                    writeLog('userLogin', 'Failure');
+                    writeLog('userLogin', "Failure: $empId");
                     echo json_encode(['success' => 0, 'msg' => '找不到使用者。'], JSON_UNESCAPED_UNICODE);
                 }
             }
         } else {
-            writeLog('userLogin', 'Failure');
+            writeLog('userLogin', "Failure: $empId");
             echo json_encode(['success' => 0, 'msg' => 'User Login Failure'], JSON_UNESCAPED_UNICODE);
         }
 
-        ldap_unbind($ldap_conn);
+        ldap_unbind($ldapConn);
     } else {
         echo json_encode(['success' => 0, 'msg' => '無法連接到 LDAP 伺服器。'], JSON_UNESCAPED_UNICODE);
     }
 }
 
 // 更新瀏覽人次
-function updateVisitorCount() {
+function updateVisitorCount($empId) {
     global $dbConn;
-
     $currentDate = date('Y-m-d');
-    $userIP = $_SERVER['REMOTE_ADDR'];
 
-    // 檢查是否已經存在當天的記錄，並且該 IP 是否已被計數
-    $checkSql = "SELECT *
-                FROM 2o_visitor_count
-                WHERE visit_date = '$currentDate'
-                AND FIND_IN_SET('$userIP', ip_address)";
+    // 檢查當天的記錄是否存在
+    $checkSql = "SELECT * FROM 2o_visitor_count WHERE visit_date = '$currentDate'";
     $result = mysqli_query($dbConn, $checkSql);
 
-    // 如果不存在記錄或該 IP 尚未被計數
-    if (mysqli_num_rows($result) == 0) {
-        $updateSql = "INSERT INTO 2o_visitor_count (visit_date, ip_address, count)
-                      VALUES ('$currentDate', '$userIP', 1)
-                      ON DUPLICATE KEY UPDATE
-                      count = count + 1,
-                      ip_address = CONCAT(ip_address, ',$userIP')";
-        mysqli_query($dbConn, $updateSql);
+    if ($result && mysqli_num_rows($result) > 0) {
+        // 如果記錄存在，檢查該工號是否已被計數
+        $row = mysqli_fetch_assoc($result);
+        $emp_ids = explode(',', $row['emp_ids']); // 將 emp_ids 轉為陣列
 
-        writeLog('updateVisitorCount', "Success - New visitor");
+        if (!in_array($empId, $emp_ids)) {
+            // 如果該工號不在 emp_ids 中，則將其加入並更新計數
+            $updatedEmpIds = $row['emp_ids'] . ',' . $empId;
+            $updateSql = "UPDATE 2o_visitor_count
+                           SET emp_ids = '$updatedEmpIds', count = count + 1
+                           WHERE visit_date = '$currentDate'";
+            mysqli_query($dbConn, $updateSql);
+            writeLog('updateVisitorCount', "Success - New visitor added: $empId");
+        } else {
+            // 如果該工號已存在，僅更新計數
+            $updateSql = "UPDATE 2o_visitor_count
+                           SET count = count + 1
+                           WHERE visit_date = '$currentDate'";
+            mysqli_query($dbConn, $updateSql);
+            writeLog('updateVisitorCount', "Skipped - Visitor already counted: $empId");
+        }
     } else {
-        writeLog('updateVisitorCount', "Skipped - Visitor already counted");
+        // 如果沒有記錄，則插入新記錄
+        $insertSql = "INSERT INTO 2o_visitor_count (visit_date, emp_ids, count)
+                      VALUES ('$currentDate', '$empId', 1)";
+        mysqli_query($dbConn, $insertSql);
+        writeLog('updateVisitorCount', "Success - New visitor: $empId");
     }
 }
 
@@ -168,24 +153,12 @@ function updateVisitorCount() {
 function getVisitorCount() {
     global $dbConn;
 
-    // $adAccount = isset($_SERVER['AUTH_USER']) ? $_SERVER['AUTH_USER'] : 'Unknown User';
-    // echo $adAccount;
-    // var_dump($_SERVER);
-    // if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
-    //     $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
-    //     list($username, $password) = explode(':', base64_decode(substr($authHeader, 6)));
-    //     echo "Username: " . $username;
-    //     echo "Password: " . $password;
-    // } elseif (isset($_SERVER['HTTP_PROXY_AUTH'])) {
-    //     $proxyAuthHeader = $_SERVER['HTTP_PROXY_AUTH'];
-    // } else {
-    //     echo "No proxy credentials found.";
-    // }
-
     $currentDate = date('Y-m-d');
+
     $sql = "SELECT count FROM 2o_visitor_count WHERE visit_date = '$currentDate'";
     $result = mysqli_query($dbConn, $sql);
     $count = ($result && mysqli_num_rows($result) > 0) ? mysqli_fetch_assoc($result)['count'] : 0;
+
     echo json_encode(['success' => 1, 'count' => $count]);
 }
 
@@ -293,7 +266,9 @@ function uploadExcel() {
 }
 
 function writeLog($action, $status) {
-    define('LOG_FILE_PATH', '//10.11.33.122/D$/khwbpeaiaoi_Shares$/K18330/Log/2OAOI/');
+    if (!defined('LOG_FILE_PATH')) {
+        define('LOG_FILE_PATH', '//10.11.33.122/D$/khwbpeaiaoi_Shares$/K18330/Log/2OAOI/');
+    }
     $currentDate = date('Y-m-d');
     $currentTime = date('H:i:s');
     $logFile = LOG_FILE_PATH  . $currentDate . '.txt'; // 使用 UNC 路徑

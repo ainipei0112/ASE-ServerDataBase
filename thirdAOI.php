@@ -156,7 +156,7 @@ function exportDataByCondition($drawingNo, $machineId) {
     }
     $stmt = $dbConn->prepare($sql);
     if (!$stmt) {
-        writeLog('getDataByCondition', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        writeLog('exportDataByCondition', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
         return;
     }
@@ -166,7 +166,7 @@ function exportDataByCondition($drawingNo, $machineId) {
 
     // 檢查查詢執行是否成功
     if (!$result) {
-        writeLog('getDataByCondition', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
+        writeLog('exportDataByCondition', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'Search by Drawing No Failure']);
         return;
     }
@@ -187,7 +187,7 @@ function exportDataByCondition($drawingNo, $machineId) {
         ];
     }
 
-    writeLog('getDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+    writeLog('exportDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
