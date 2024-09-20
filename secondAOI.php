@@ -272,7 +272,7 @@ function writeLog($action, $status) {
     $currentDate = date('Y-m-d');
     $currentTime = date('H:i:s');
     $logFile = LOG_FILE_PATH  . $currentDate . '.txt'; // 使用 UNC 路徑
-    $userIP = $_SERVER['REMOTE_ADDR'] . "：";
-    $logMessage = "$currentTime $action $status " . PHP_EOL;
+    $userIP = "[IP：" . $_SERVER['REMOTE_ADDR'] . "->";
+    $logMessage = "$currentTime] $action $status " . PHP_EOL;
     file_put_contents($logFile, $userIP . $logMessage, FILE_APPEND);
 }
