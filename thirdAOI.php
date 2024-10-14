@@ -53,6 +53,7 @@ switch ($action) {
         break;
 }
 
+// ---------DB---------
 // 取得3OAOI資料
 function get3oaoidata() {
     global $dbConn;
@@ -190,6 +191,171 @@ function exportDataByCondition($drawingNo, $machineId) {
     writeLog('exportDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
 }
+
+// ---------API---------
+// // 取得3OAOI資料
+// function get3oaoidata() {
+//     global $config;
+
+//     // 初始化cURL會話
+//     $ch = curl_init();
+//     curl_setopt($ch, CURLOPT_URL, $config['api_url']);
+//     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+//     curl_setopt($ch, CURLOPT_USERPWD, "{$config['username']}:{$config['password']}");
+
+//     // 執行cURL請求
+//     $response = curl_exec($ch);
+
+//     // 檢查是否有錯誤發生
+//     if (curl_errno($ch)) {
+//         writeLog('get3oaoidata', 'cURL Error: ' . curl_error($ch));
+//         echo json_encode(['success' => 0, 'msg' => 'API request failed']);
+//         curl_close($ch);
+//         return;
+//     }
+
+//     curl_close($ch);
+
+//     // 解析JSON回應
+//     $data = json_decode($response, true);
+
+//     // 檢查JSON解析是否成功
+//     if (json_last_error() !== JSON_ERROR_NONE) {
+//         writeLog('get3oaoidata', 'JSON Decoding Error: ' . json_last_error_msg());
+//         echo json_encode(['success' => 0, 'msg' => 'Failed to parse API response']);
+//         return;
+//     }
+
+//     // 轉換資料格式
+//     $results = [];
+//     foreach ($data as $item) {
+//         $results[] = [
+//             'Strip_No' => $item['strip_no'] ?? '',
+//             'Drawing_No' => $item['drawing_no'] ?? '',
+//             'Machine_Id' => $item['machine_id'] ?? '',
+//             'Fail_Ppm' => $item['fail_ppm'] ?? '',
+//             'Pass_Rate' => $item['pass_rate'] ?? '',
+//             'Overkill_Rate' => $item['overkill_rate'] ?? '',
+//             'Ao_Time_Start' => $item['ao_time_start'] ?? '',
+//             'Device_Id' => $item['device_id'] ?? ''
+//         ];
+//     }
+
+//     writeLog('get3oaoidata', count($results) > 0 ? 'Success' : 'No Data Found');
+//     echo json_encode(['success' => 1, 'results' => $results]);
+// }
+
+// // 根據條件查詢資料
+// function getDataByCondition($drawingNo, $machineId) {
+//     global $config;
+
+//     $api_url = $config['api_url'] . "?drawing_no=" . urlencode($drawingNo) . "&machine_id=" . urlencode($machineId);
+
+//     // 初始化cURL會話
+//     $ch = curl_init();
+//     curl_setopt($ch, CURLOPT_URL, $api_url);
+//     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+//     curl_setopt($ch, CURLOPT_USERPWD, "{$config['username']}:{$config['password']}");
+
+//     // 執行cURL請求
+//     $response = curl_exec($ch);
+
+//     // 檢查是否有錯誤發生
+//     if (curl_errno($ch)) {
+//         writeLog('getDataByCondition', 'cURL Error: ' . curl_error($ch));
+//         echo json_encode(['success' => 0, 'msg' => 'API request failed']);
+//         curl_close($ch);
+//         return;
+//     }
+
+//     curl_close($ch);
+
+//     // 解析JSON回應
+//     $data = json_decode($response, true);
+
+//     // 檢查JSON解析是否成功
+//     if (json_last_error() !== JSON_ERROR_NONE) {
+//         writeLog('getDataByCondition', 'JSON Decoding Error: ' . json_last_error_msg());
+//         echo json_encode(['success' => 0, 'msg' => 'Failed to parse API response']);
+//         return;
+//     }
+
+//     // 輸出查詢結果
+//     $results = [];
+//     foreach ($data as $item) {
+//         $results[] = [
+//             'Strip_No' => $item['strip_no'] ?? '',
+//             'Drawing_No' => $item['drawing_no'] ?? '',
+//             'Machine_Id' => $item['machine_id'] ?? '',
+//             'Fail_Ppm' => $item['fail_ppm'] ?? '',
+//             'Pass_Rate' => $item['pass_rate'] ?? '',
+//             'Overkill_Rate' => $item['overkill_rate'] ?? '',
+//             'Fail_Count' => $item['fail_count'] ?? '',
+//             'Pass_Count' => $item['pass_count'] ?? '',
+//             'Aoi_Defect' => $item['aoi_defect'] ?? '',
+//             'Ao_Time_Start' => $item['ao_time_start'] ?? '',
+//             'Device_Id' => $item['device_id'] ?? ''
+//         ];
+//     }
+
+//     writeLog('getDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+//     echo json_encode(['success' => 1, 'results' => $results]);
+// }
+
+// // 根據條件匯出資料
+// function exportDataByCondition($drawingNo, $machineId) {
+//     global $config;
+
+//     $api_url = $config['api_url'] . "?drawing_no=" . urlencode($drawingNo) . "&machine_id=" . urlencode($machineId);
+
+//     // 初始化cURL會話
+//     $ch = curl_init();
+//     curl_setopt($ch, CURLOPT_URL, $api_url);
+//     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+//     curl_setopt($ch, CURLOPT_USERPWD, "{$config['username']}:{$config['password']}");
+
+//     // 執行cURL請求
+//     $response = curl_exec($ch);
+
+//     // 檢查是否有錯誤發生
+//     if (curl_errno($ch)) {
+//         writeLog('exportDataByCondition', 'cURL Error: ' . curl_error($ch));
+//         echo json_encode(['success' => 0, 'msg' => 'API request failed']);
+//         curl_close($ch);
+//         return;
+//     }
+
+//     curl_close($ch);
+
+//     // 解析JSON回應
+//     $data = json_decode($response, true);
+
+//     // 檢查JSON解析是否成功
+//     if (json_last_error() !== JSON_ERROR_NONE) {
+//         writeLog('exportDataByCondition', 'JSON Decoding Error: ' . json_last_error_msg());
+//         echo json_encode(['success' => 0, 'msg' => 'Failed to parse API response']);
+//         return;
+//     }
+
+//     // 輸出查詢結果
+//     $results = [];
+//     foreach ($data as $item) {
+//         $results[] = [
+//             'Lot_No' => $item['lot_no'] ?? '',
+//             'Strip_No' => $item['strip_no'] ?? '',
+//             'Drawing_No' => $item['drawing_no'] ?? '',
+//             'Machine_Id' => $item['machine_id'] ?? '',
+//             'Fail_Ppm' => $item['fail_ppm'] ?? '',
+//             'Pass_Rate' => $item['pass_rate'] ?? '',
+//             'Overkill_Rate' => $item['overkill_rate'] ?? '',
+//             'Ao_Time_Start' => $item['ao_time_start'] ?? '',
+//             'Device_Id' => $item['device_id'] ?? ''
+//         ];
+//     }
+
+//     writeLog('exportDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+//     echo json_encode(['success' => 1, 'results' => $results]);
+// }
 
 // 信件派送
 function mailAlert($emailData) {
