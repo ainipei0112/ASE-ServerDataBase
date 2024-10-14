@@ -220,15 +220,23 @@ function getProductByCondition($searchType, $searchValue) {
     global $dbConn;
 
     if ($searchValue !== NULL) {
-        $currentDate = date('Y-m-d'); // 當前日期
-        $threeMonthsAgo = date('Y-m-d', strtotime('-2 months')); // 兩個月前的日期
-
         if ($searchType === 'lotNo') {
             $sql = "SELECT * FROM all_2oaoi WHERE Lot LIKE '%$searchValue%'";
-        } else if ($searchType === 'deviceID') {
+        } else if ($searchType === 'deviceId') {
             $sql = "SELECT * FROM all_2oaoi WHERE Device_ID LIKE '%$searchValue%'";
         } else if ($searchType === 'customerCode') {
-            $sql = "SELECT * FROM all_2oaoi WHERE SUBSTRING(Lot, 3, 2) = '$searchValue' AND Date_1 BETWEEN '$threeMonthsAgo' AND '$currentDate'";
+            $parts = explode(',', $searchValue);
+            if (count($parts) !== 3) {
+                echo json_encode(['success' => 0, 'msg' => 'Invalid customerCode search value']);
+                return;
+            }
+            $customerCode = $parts[0];
+            $startDate = $parts[1];
+            $endDate = $parts[2];
+
+            $sql = "SELECT * FROM all_2oaoi
+                    WHERE SUBSTRING(Lot, 3, 2) = '$customerCode'
+                    AND Date_1 BETWEEN '$startDate' AND '$endDate'";
         } else {
             echo json_encode(['success' => 0, 'msg' => 'Invalid search type']);
             return;
