@@ -84,6 +84,9 @@ function get3oaoidata() {
             'Fail_Ppm' => $row['fail_ppm'],
             'Pass_Rate' => $row['pass_rate'],
             'Overkill_Rate' => $row['overkill_rate'],
+            'Fail_Count' => $row['fail_count'],
+            'Pass_Count' => $row['pass_count'],
+            'Aoi_Defect' => $row['aoi_defect'],
             'Ao_Time_Start' => $row['ao_time_start'],
             'Device_Id' => $row['device_id']
         ];
