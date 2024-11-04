@@ -32,7 +32,7 @@ switch ($action) {
         userLogin($data['userData']);
         break;
     case 'getAIResults':
-        getAIResults($data['selectedCustomer'], $data['selectedDateRange']);
+        getAIResults($data['selectedCustomer'], $data['selectedMachine'], $data['selectedDateRange']);
         break;
     case 'getProductByCondition':
         getProductByCondition($data['searchType'], $data['searchValue']);
@@ -191,15 +191,17 @@ function getVisitorCount() {
     echo json_encode(['success' => 1, 'count' => $count]);
 }
 
-function getAIResults($selectedCustomer, $selectedDateRange) {
+function getAIResults($selectedCustomer, $selectedMachine, $selectedDateRange) {
     global $dbConn;
 
     $customerCode = $selectedCustomer['CustomerCode'];
+    $machineName = $selectedMachine['MachineName'];
     $start_date = $selectedDateRange[0];
     $end_date = $selectedDateRange[1];
 
     $sql = "SELECT * FROM all_2oaoi WHERE Date_1 BETWEEN '$start_date' AND '$end_date'";
     $sql .= ($customerCode !== 'ALL') ? " AND SUBSTRING(Lot, 3, 2) = '$customerCode'" : "";
+    $sql .= ($machineName !== 'ALL') ? " AND Machine_ID = '$machineName'" : "";
     $allproducts = mysqli_query($dbConn, $sql);
 
     if (mysqli_num_rows($allproducts) > 0) {
