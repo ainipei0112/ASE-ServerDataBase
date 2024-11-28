@@ -46,7 +46,7 @@ switch ($action) {
         exportDataByCondition($data['drawingNo'], $data['machineId']);
         break;
     case 'getDetailsByDate':
-        getDetailsByDate($data['deviceId'], $data['date']);
+        getDetailsByDate($data['deviceId'], $data['date'], $data['periodType']);
         break;
     case 'mailAlert':
         mailAlert($data['emailData']);
@@ -198,13 +198,38 @@ function exportDataByCondition($drawingNo, $machineId) {
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
-function getDetailsByDate($deviceId, $date) {
+function getDetailsByDate($deviceId, $date, $periodType = 'daily') {
     global $dbConn;
 
-    $sql = "SELECT machine_id, fail_ppm, pass_rate, overkill_rate
+    // 月份轉置
+    $months = ["Jan" => "01", "Feb" => "02", "Mar" => "03", "Apr" => "04", "May" => "05", "Jun" => "06", "Jul" => "07", "Aug" => "08", "Sep" => "09", "Oct" => "10", "Nov" => "11", "Dec" => "12"];
+
+    // 如果是monthly，將月份名稱轉換為數字
+    if ($periodType === 'monthly' && isset($months[$date])) {
+        $date = date('Y') . '-' . $months[$date];
+    }
+
+    // 如果是weekly，將Wxx格式轉換為年和週次格式
+    if ($periodType === 'weekly' && preg_match('/^W(\d{2})$/', $date, $matches)) {
+        $date = date('Y') . '-W' . $matches[1];
+    }
+
+    $sql = "SELECT machine_id, fail_ppm, pass_rate, overkill_rate, ao_time_start
             FROM stripData
-            WHERE device_id = :deviceId
-            AND date(ao_time_start) = :date";
+            WHERE device_id = :deviceId";
+
+    // 根據不同時間週期調整 SQL 查詢
+    switch ($periodType) {
+        case 'daily':
+            $sql .= " AND date(ao_time_start) = :date";
+            break;
+        case 'weekly':
+            $sql .= " AND strftime('%Y-W%W', ao_time_start) = :date";
+            break;
+        case 'monthly':
+            $sql .= " AND strftime('%Y-%m', ao_time_start) = :date";
+            break;
+    }
 
     $stmt = $dbConn->prepare($sql);
     $stmt->bindValue(':deviceId', $deviceId, SQLITE3_TEXT);
