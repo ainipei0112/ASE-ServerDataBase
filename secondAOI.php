@@ -40,12 +40,18 @@ switch ($action) {
     case 'getVisitorCount':
         getVisitorCount();
         break;
+    case 'getCustomerData':
+        getCustomerData();
+        break;
         // case 'mailAlert':
         //     mailAlert();
         //     break;
         // case 'uploadExcel':
         //     uploadExcel();
         //     break;
+    case 'getCustomerDetails':
+        getCustomerDetails($data['customerCode']);
+        break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
         break;
@@ -194,24 +200,24 @@ function getVisitorCount() {
 function getAIResults($selectedCustomer, $selectedMachine, $selectedDateRange) {
     global $dbConn;
 
-    $customerCode = $selectedCustomer['CustomerCode'];
-    $machineName = $selectedMachine['MachineName'];
+    $customerCode = ($selectedCustomer === null) ? 'ALL' : $selectedCustomer['CustomerCode'];
+    $machineName = ($selectedMachine === null) ? 'ALL' : $selectedMachine['MachineName'];
     $start_date = $selectedDateRange[0];
     $end_date = $selectedDateRange[1];
 
     $sql = "SELECT * FROM all_2oaoi WHERE Date_1 BETWEEN '$start_date' AND '$end_date'";
     $sql .= ($customerCode !== 'ALL') ? " AND SUBSTRING(Lot, 3, 2) = '$customerCode'" : "";
     $sql .= ($machineName !== 'ALL') ? " AND Machine_ID = '$machineName'" : "";
-    $allproducts = mysqli_query($dbConn, $sql);
+    $allcustomers = mysqli_query($dbConn, $sql);
 
-    if (mysqli_num_rows($allproducts) > 0) {
-        $all_products = mysqli_fetch_all($allproducts, MYSQLI_ASSOC);
+    if (mysqli_num_rows($allcustomers) > 0) {
+        $all_products = mysqli_fetch_all($allcustomers, MYSQLI_ASSOC);
         writeLog('getAIResults', 'Success');
-        echo json_encode(['success' => 1, 'products' => $all_products, 'customerCode' => $customerCode]);
-    } else if (mysqli_num_rows($allproducts) == 0) {
-        $all_products = mysqli_fetch_all($allproducts, MYSQLI_ASSOC);
+        echo json_encode(['success' => 1, 'products' => $all_products, 'customerCode' => $customerCode, 'machineName' => $machineName]);
+    } else if (mysqli_num_rows($allcustomers) == 0) {
+        $all_products = mysqli_fetch_all($allcustomers, MYSQLI_ASSOC);
         writeLog('getAIResults', 'No Data Found');
-        echo json_encode(['success' => 1, 'products' => $all_products, 'customerCode' => $customerCode]);
+        echo json_encode(['success' => 1, 'products' => $all_products, 'customerCode' => $customerCode, 'machineName' => $machineName]);
     } else {
         writeLog('getAIResults', 'Failure');
         echo json_encode(['success' => 0, 'msg' => 'getAIResults Search Product Failure']);
@@ -258,6 +264,57 @@ function getProductByCondition($searchType, $searchValue) {
     } else {
         writeLog('getProductByCondition', 'Failure');
         echo json_encode(['success' => 0, 'msg' => 'getProductByCondition Search Product Failure']);
+    }
+}
+
+function getCustomerData() {
+    global $dbConn;
+
+    $sql = "SELECT * FROM customer_data ";
+    $allcustomers = mysqli_query($dbConn, $sql);
+
+    if (mysqli_num_rows($allcustomers) > 0) {
+        $all_customers = mysqli_fetch_all($allcustomers, MYSQLI_ASSOC);
+        writeLog('getCustomerData', 'Success');
+        echo json_encode(['success' => 1, 'datas' => $all_customers]);
+    } else if (mysqli_num_rows($allcustomers) == 0) {
+        $all_customers = mysqli_fetch_all($allcustomers, MYSQLI_ASSOC);
+        writeLog('getCustomerData', 'No Data Found');
+        echo json_encode(['success' => 1, 'datas' => $all_customers]);
+    } else {
+        writeLog('getCustomerData', 'Failure');
+        echo json_encode(['success' => 0, 'msg' => 'getCustomerData Failure']);
+    }
+}
+
+function getCustomerDetails($customerCode) {
+    global $dbConn;
+
+    $sql = "SELECT
+        a.Date_1 as Date,
+        a.Lot,
+        a.AOI_ID as ID,
+        a.Device_ID,
+        a.AOI_Scan_Amount,
+        a.Final_Pass_Amount,
+        a.Final_Yield,
+        a.Machine_ID,
+        c.Final_Yield_Goal as Yield_Goal
+    FROM all_2oaoi a
+    LEFT JOIN customer_data c ON SUBSTRING(a.Lot, 3, 2) = c.Customer_Code
+    WHERE SUBSTRING(a.Lot, 3, 2) = ?
+    ORDER BY a.Date_1 DESC";
+
+    $stmt = mysqli_prepare($dbConn, $sql);
+    mysqli_stmt_bind_param($stmt, "s", $customerCode);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    if ($result) {
+        $details = mysqli_fetch_all($result, MYSQLI_ASSOC);
+        echo json_encode(['success' => 1, 'details' => $details]);
+    } else {
+        echo json_encode(['success' => 0, 'msg' => 'Failed to get customer details']);
     }
 }
 
