@@ -45,6 +45,9 @@ switch ($action) {
     case 'exportDataByCondition':
         exportDataByCondition($data['drawingNo'], $data['machineId']);
         break;
+    case 'getDetailsByDate':
+        getDetailsByDate($data['deviceId'], $data['date']);
+        break;
     case 'mailAlert':
         mailAlert($data['emailData']);
         break;
@@ -192,6 +195,32 @@ function exportDataByCondition($drawingNo, $machineId) {
     }
 
     writeLog('exportDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+    echo json_encode(['success' => 1, 'results' => $results]);
+}
+
+function getDetailsByDate($deviceId, $date) {
+    global $dbConn;
+
+    $sql = "SELECT machine_id, fail_ppm, pass_rate, overkill_rate
+            FROM stripData
+            WHERE device_id = :deviceId
+            AND date(ao_time_start) = :date";
+
+    $stmt = $dbConn->prepare($sql);
+    $stmt->bindValue(':deviceId', $deviceId, SQLITE3_TEXT);
+    $stmt->bindValue(':date', $date, SQLITE3_TEXT);
+    $result = $stmt->execute();
+
+    $results = [];
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $results[] = [
+            'Machine_Id' => $row['machine_id'],
+            'Fail_Ppm' => $row['fail_ppm'],
+            'Pass_Rate' => $row['pass_rate'],
+            'Overkill_Rate' => $row['overkill_rate']
+        ];
+    }
+
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
