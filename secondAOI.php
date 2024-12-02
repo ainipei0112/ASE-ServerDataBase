@@ -290,20 +290,23 @@ function getCustomerData() {
 function getCustomerDetails($customerCode) {
     global $dbConn;
 
-    $sql = "SELECT
+    $sql =
+        "SELECT
         a.Date_1 as Date,
         a.Lot,
-        a.AOI_ID as ID,
         a.Device_ID,
-        a.AOI_Scan_Amount,
-        a.Final_Pass_Amount,
-        a.Final_Yield,
+        SUM(a.AOI_Scan_Amount) as AOI_Scan_Amount,  -- 將 AOI_Scan_Amount 加總
+        SUM(a.Final_Pass_Amount) as Final_Pass_Amount,  -- 將 Final_Pass_Amount 加總
+        SUM(a.AOI_Scan_Amount) - SUM(a.Final_Pass_Amount) as Actual_Deduction, -- 計算實際扣量數
+        AVG(a.Final_Yield) as Final_Yield,  -- 將 Final_Yield 平均
         a.Machine_ID,
         c.Final_Yield_Goal as Yield_Goal
     FROM all_2oaoi a
     LEFT JOIN customer_data c ON SUBSTRING(a.Lot, 3, 2) = c.Customer_Code
     WHERE SUBSTRING(a.Lot, 3, 2) = ?
-    ORDER BY a.Date_1 DESC";
+    AND a.Date_1 = DATE_SUB(CURDATE(), INTERVAL 1 DAY)  -- 只撈取昨天的資料
+    GROUP BY a.Date_1, a.Lot, a.Device_ID, a.Machine_ID, c.Final_Yield_Goal
+    ORDER BY a.Date_1 DESC, Final_Yield DESC, Actual_Deduction DESC";
 
     $stmt = mysqli_prepare($dbConn, $sql);
     mysqli_stmt_bind_param($stmt, "s", $customerCode);
