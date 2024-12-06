@@ -39,17 +39,20 @@ switch ($action) {
     case 'get3oaoidata':
         get3oaoidata();
         break;
-    case 'getDataByCondition':
-        getDataByCondition($data['drawingNo'], $data['machineId']);
+    case 'getDataByBDOrMachine':
+        getDataByBDOrMachine($data['drawingNo'], $data['machineId']);
         break;
-    case 'exportDataByCondition':
-        exportDataByCondition($data['drawingNo'], $data['machineId']);
+    case 'exportDataByBDOrMachine':
+        exportDataByBDOrMachine($data['drawingNo'], $data['machineId']);
         break;
     case 'getDetailsByDate':
         getDetailsByDate($data['deviceId'], $data['date'], $data['periodType']);
         break;
     case 'getBDDetailsByMachineStrip':
         getBDDetailsByMachineStrip($data['deviceId'], $data['machineId'], $data['date'], $data['periodType']);
+        break;
+    case 'getMachineDetailsByBD':
+        getMachineDetailsByBD($data['drawingNo'], $data['machineId'], $data['periodType']);
         break;
     case 'mailAlert':
         mailAlert($data['emailData']);
@@ -102,7 +105,7 @@ function get3oaoidata() {
 }
 
 // 根據條件查詢資料
-function getDataByCondition($drawingNo, $machineId) {
+function getDataByBDOrMachine($drawingNo, $machineId) {
     global $dbConn;
 
     $sql = "SELECT * FROM stripData WHERE 1 = 1";
@@ -115,7 +118,7 @@ function getDataByCondition($drawingNo, $machineId) {
     }
     $stmt = $dbConn->prepare($sql);
     if (!$stmt) {
-        writeLog('getDataByCondition', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        writeLog('getDataByBDOrMachine', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
         return;
     }
@@ -125,7 +128,7 @@ function getDataByCondition($drawingNo, $machineId) {
 
     // 檢查查詢執行是否成功
     if (!$result) {
-        writeLog('getDataByCondition', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
+        writeLog('getDataByBDOrMachine', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'Search by Condition Failure']);
         return;
     }
@@ -148,12 +151,12 @@ function getDataByCondition($drawingNo, $machineId) {
         ];
     }
 
-    writeLog('getDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+    writeLog('getDataByBDOrMachine', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
 // 根據條件匯出資料
-function exportDataByCondition($drawingNo, $machineId) {
+function exportDataByBDOrMachine($drawingNo, $machineId) {
     global $dbConn;
 
     $sql = "SELECT * FROM stripData WHERE 1 = 1";
@@ -166,7 +169,7 @@ function exportDataByCondition($drawingNo, $machineId) {
     }
     $stmt = $dbConn->prepare($sql);
     if (!$stmt) {
-        writeLog('exportDataByCondition', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        writeLog('exportDataByBDOrMachine', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
         return;
     }
@@ -176,7 +179,7 @@ function exportDataByCondition($drawingNo, $machineId) {
 
     // 檢查查詢執行是否成功
     if (!$result) {
-        writeLog('exportDataByCondition', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
+        writeLog('exportDataByBDOrMachine', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
         echo json_encode(['success' => 0, 'msg' => 'Search by Drawing No Failure']);
         return;
     }
@@ -197,7 +200,7 @@ function exportDataByCondition($drawingNo, $machineId) {
         ];
     }
 
-    writeLog('exportDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+    writeLog('exportDataByBDOrMachine', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
@@ -325,6 +328,67 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
+function getMachineDetailsByBD($drawingNo, $machineId, $periodType) {
+    global $dbConn;
+
+    $sql = "SELECT ao_time_start, lot_no, strip_no, aoi_defect, pass_count, fail_count, pass_rate, overkill_rate, machine_id, drawing_no
+            FROM stripData
+            WHERE drawing_no = :drawingNo
+            AND machine_id = :machineId";
+
+    // 根據不同時間週期調整 SQL 查詢
+    switch ($periodType) {
+        case 'daily':
+            $sql .= " AND date(strftime('%Y-%m-%d', ao_time_start)) = date('now', '-1 day')";
+            break;
+        case 'weekly':
+            $sql .= " AND date(strftime('%Y-%m-%d', ao_time_start)) >= date('now', '-7 days')
+                      AND date(strftime('%Y-%m-%d', ao_time_start)) < date('now', 'localtime')";
+            break;
+        case 'monthly':
+            $sql .= " AND date(strftime('%Y-%m-%d', ao_time_start)) >= date('now', '-1 month')
+                      AND date(strftime('%Y-%m-%d', ao_time_start)) < date('now', 'localtime')";
+            break;
+    }
+
+    $stmt = $dbConn->prepare($sql);
+    if (!$stmt) {
+        writeLog('getMachineDetailsByBD', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
+        return;
+    }
+    $stmt->bindValue(':drawingNo', $drawingNo, SQLITE3_TEXT);
+    $stmt->bindValue(':machineId', $machineId, SQLITE3_TEXT);
+    $result = $stmt->execute();
+
+    // 檢查查詢執行是否成功
+    if (!$result) {
+        writeLog('getMachineDetailsByBD', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Search by Condition Failure']);
+        return;
+    }
+
+    // 輸出查詢結果
+    $results = [];
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $results[] = [
+            'Ao_Time_Start' => $row['ao_time_start'],
+            'Lot_No' => $row['lot_no'],
+            'Strip_No' => $row['strip_no'],
+            'Aoi_Defect' => $row['aoi_defect'],
+            'Pass_Count' => $row['pass_count'],
+            'Fail_Count' => $row['fail_count'],
+            'Pass_Rate' => $row['pass_rate'],
+            'Overkill_Rate' => $row['overkill_rate'],
+            'Machine_Id' => $row['machine_id'],
+            'Drawing_No' => $row['drawing_no']
+        ];
+    }
+
+    writeLog('getMachineDetailsByBD', count($results) > 0 ? 'Success' : 'No Data Found');
+    echo json_encode(['success' => 1, 'results' => $results]);
+}
+
 // ---------API---------
 // // 取得3OAOI資料
 // function get3oaoidata() {
@@ -379,7 +443,7 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
 // }
 
 // // 根據條件查詢資料
-// function getDataByCondition($drawingNo, $machineId) {
+// function getDataByBDOrMachine($drawingNo, $machineId) {
 //     global $config;
 
 //     $api_url = $config['api_url'] . "?drawing_no=" . urlencode($drawingNo) . "&machine_id=" . urlencode($machineId);
@@ -395,7 +459,7 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
 
 //     // 檢查是否有錯誤發生
 //     if (curl_errno($ch)) {
-//         writeLog('getDataByCondition', 'cURL Error: ' . curl_error($ch));
+//         writeLog('getDataByBDOrMachine', 'cURL Error: ' . curl_error($ch));
 //         echo json_encode(['success' => 0, 'msg' => 'API request failed']);
 //         curl_close($ch);
 //         return;
@@ -408,7 +472,7 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
 
 //     // 檢查JSON解析是否成功
 //     if (json_last_error() !== JSON_ERROR_NONE) {
-//         writeLog('getDataByCondition', 'JSON Decoding Error: ' . json_last_error_msg());
+//         writeLog('getDataByBDOrMachine', 'JSON Decoding Error: ' . json_last_error_msg());
 //         echo json_encode(['success' => 0, 'msg' => 'Failed to parse API response']);
 //         return;
 //     }
@@ -431,12 +495,12 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
 //         ];
 //     }
 
-//     writeLog('getDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+//     writeLog('getDataByBDOrMachine', count($results) > 0 ? 'Success' : 'No Data Found');
 //     echo json_encode(['success' => 1, 'results' => $results]);
 // }
 
 // // 根據條件匯出資料
-// function exportDataByCondition($drawingNo, $machineId) {
+// function exportDataByBDOrMachine($drawingNo, $machineId) {
 //     global $config;
 
 //     $api_url = $config['api_url'] . "?drawing_no=" . urlencode($drawingNo) . "&machine_id=" . urlencode($machineId);
@@ -452,7 +516,7 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
 
 //     // 檢查是否有錯誤發生
 //     if (curl_errno($ch)) {
-//         writeLog('exportDataByCondition', 'cURL Error: ' . curl_error($ch));
+//         writeLog('exportDataByBDOrMachine', 'cURL Error: ' . curl_error($ch));
 //         echo json_encode(['success' => 0, 'msg' => 'API request failed']);
 //         curl_close($ch);
 //         return;
@@ -465,7 +529,7 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
 
 //     // 檢查JSON解析是否成功
 //     if (json_last_error() !== JSON_ERROR_NONE) {
-//         writeLog('exportDataByCondition', 'JSON Decoding Error: ' . json_last_error_msg());
+//         writeLog('exportDataByBDOrMachine', 'JSON Decoding Error: ' . json_last_error_msg());
 //         echo json_encode(['success' => 0, 'msg' => 'Failed to parse API response']);
 //         return;
 //     }
@@ -486,7 +550,7 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
 //         ];
 //     }
 
-//     writeLog('exportDataByCondition', count($results) > 0 ? 'Success' : 'No Data Found');
+//     writeLog('exportDataByBDOrMachine', count($results) > 0 ? 'Success' : 'No Data Found');
 //     echo json_encode(['success' => 1, 'results' => $results]);
 // }
 
