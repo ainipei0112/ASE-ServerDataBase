@@ -331,7 +331,9 @@ function getBDDetailsByMachineStrip($deviceId, $machineId, $date, $periodType = 
 function getMachineDetailsByBD($drawingNo, $machineId, $periodType) {
     global $dbConn;
 
-    $sql = "SELECT ao_time_start, lot_no, strip_no, aoi_defect, pass_count, fail_count, pass_rate, overkill_rate, machine_id, drawing_no
+    $sql = "SELECT ao_time_start, lot_no, strip_no, aoi_defect, pass_count, fail_count, pass_rate,
+                   CASE WHEN overkill_rate < 0 THEN 0 ELSE overkill_rate END AS overkill_rate,
+                   machine_id, drawing_no
             FROM stripData
             WHERE drawing_no = :drawingNo
             AND machine_id = :machineId";
