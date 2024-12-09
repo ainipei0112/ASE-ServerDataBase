@@ -50,7 +50,8 @@ switch ($action) {
         //     uploadExcel();
         //     break;
     case 'getCustomerDetails':
-        getCustomerDetails($data['customerCode']);
+        // getCustomerDetails($data['customerCode']);
+        getCustomerDetails($data['customerCode'], $data['dateRange']);
         break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
@@ -287,8 +288,11 @@ function getCustomerData() {
     }
 }
 
-function getCustomerDetails($customerCode) {
+function getCustomerDetails($customerCode, $dateRange = null) {
     global $dbConn;
+
+    $start_date = $dateRange ? $dateRange[0] : date('Y-m-d', strtotime('-1 day'));
+    $end_date = $dateRange ? $dateRange[1] : date('Y-m-d', strtotime('-1 day'));
 
     $sql =
         "SELECT
@@ -304,12 +308,12 @@ function getCustomerDetails($customerCode) {
     FROM all_2oaoi a
     LEFT JOIN customer_data c ON SUBSTRING(a.Lot, 3, 2) = c.Customer_Code
     WHERE SUBSTRING(a.Lot, 3, 2) = ?
-    AND a.Date_1 = DATE_SUB(CURDATE(), INTERVAL 1 DAY)  -- 只撈取昨天的資料
+    AND a.Date_1 BETWEEN ? AND ?  -- 若無日期選擇就只撈取昨天的資料
     GROUP BY a.Date_1, a.Lot, a.Device_ID, a.Machine_ID, c.Final_Yield_Goal
     ORDER BY a.Date_1 DESC, Final_Yield DESC, Actual_Deduction DESC";
 
     $stmt = mysqli_prepare($dbConn, $sql);
-    mysqli_stmt_bind_param($stmt, "s", $customerCode);
+    mysqli_stmt_bind_param($stmt, "sss", $customerCode, $start_date, $end_date);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
 
