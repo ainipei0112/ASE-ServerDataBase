@@ -45,6 +45,9 @@ switch ($action) {
     case 'exportDataByBDOrMachine':
         exportDataByBDOrMachine($data['drawingNo'], $data['machineId']);
         break;
+    case 'getBDDetailsByOverall':
+        getBDDetailsByOverall($data['date'], $data['periodType']);
+        break;
     case 'getDetailsByDate':
         getDetailsByDate($data['deviceId'], $data['date'], $data['periodType']);
         break;
@@ -201,6 +204,80 @@ function exportDataByBDOrMachine($drawingNo, $machineId) {
     }
 
     writeLog('exportDataByBDOrMachine', count($results) > 0 ? 'Success' : 'No Data Found');
+    echo json_encode(['success' => 1, 'results' => $results]);
+}
+
+function getBDDetailsByOverall($date, $periodType = 'daily') {
+    global $dbConn;
+
+    // 月份轉置
+    $months = ["Jan" => "01", "Feb" => "02", "Mar" => "03", "Apr" => "04", "May" => "05", "Jun" => "06", "Jul" => "07", "Aug" => "08", "Sep" => "09", "Oct" => "10", "Nov" => "11", "Dec" => "12"];
+
+    // 如果是monthly，將月份名稱轉換為數字
+    if ($periodType === 'monthly' && isset($months[$date])) {
+        $date = date('Y') . '-' . $months[$date];
+    }
+
+    // 如果是weekly，將Wxx格式轉換為年和週次格式
+    if ($periodType === 'weekly' && preg_match('/^W(\d{2})$/', $date, $matches)) {
+        $date = date('Y') . '-W' . $matches[1];
+    }
+
+    $sql = "SELECT
+                drawing_no,
+                SUM(fail_count) as total_fail_count,
+                SUM(aoi_defect) as total_aoi_defect,
+                SUM(pass_count) as total_pass_count,
+                AVG(pass_rate) * 100 as avg_pass_rate,
+                AVG(overkill_rate) * 100 as avg_overkill_rate
+            FROM stripData
+            WHERE 1 = 1";
+
+    // 根據不同時間週期調整 SQL 查詢
+    switch ($periodType) {
+        case 'daily':
+            $sql .= " AND date(ao_time_start) = :date";
+            break;
+        case 'weekly':
+            $sql .= " AND strftime('%Y-W%W', ao_time_start) = :date";
+            break;
+        case 'monthly':
+            $sql .= " AND strftime('%Y-%m', ao_time_start) = :date";
+            break;
+    }
+
+    $sql .= " GROUP BY drawing_no";
+
+    $stmt = $dbConn->prepare($sql);
+    if (!$stmt) {
+        writeLog('getBDDetailsByOverall', 'SQL Prepare Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Database error occurred']);
+        return;
+    }
+    $stmt->bindValue(':date', $date, SQLITE3_TEXT);
+    $result = $stmt->execute();
+
+    // 檢查查詢執行是否成功
+    if (!$result) {
+        writeLog('getBDDetailsByOverall', 'Query Execution Failure: ' . $dbConn->lastErrorMsg());
+        echo json_encode(['success' => 0, 'msg' => 'Search by Condition Failure']);
+        return;
+    }
+
+    // 輸出查詢結果
+    $results = [];
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $results[] = [
+            'Drawing_No' => $row['drawing_no'],
+            'Fail_Count' => $row['total_fail_count'],
+            'Aoi_Defect' => $row['total_aoi_defect'],
+            'Pass_Count' => $row['total_pass_count'],
+            'Pass_Rate' => round($row['avg_pass_rate'], 1),
+            'Overkill_Rate' => round($row['avg_overkill_rate'], 1)
+        ];
+    }
+
+    writeLog('getBDDetailsByOverall', count($results) > 0 ? 'Success' : 'No Data Found');
     echo json_encode(['success' => 1, 'results' => $results]);
 }
 
