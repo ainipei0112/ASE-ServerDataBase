@@ -35,7 +35,7 @@ switch ($action) {
         getAIResults($data['selectedCustomer'], $data['selectedMachine'], $data['selectedDateRange']);
         break;
     case 'getProductByCondition':
-        getProductByCondition($data['searchType'], $data['searchValue']);
+        getProductByCondition($data['searchCriteria']);
         break;
     case 'getVisitorCount':
         getVisitorCount();
@@ -225,46 +225,55 @@ function getAIResults($selectedCustomer, $selectedMachine, $selectedDateRange) {
     }
 }
 
-function getProductByCondition($searchType, $searchValue) {
+function getProductByCondition($searchCriteria) {
     global $dbConn;
 
-    if ($searchValue !== NULL) {
-        if ($searchType === 'lotNo') {
-            $sql = "SELECT * FROM all_2oaoi WHERE Lot LIKE '%$searchValue%'";
-        } else if ($searchType === 'deviceId') {
-            $sql = "SELECT * FROM all_2oaoi WHERE Device_ID LIKE '%$searchValue%'";
-        } else if ($searchType === 'customerCode') {
-            $parts = explode(',', $searchValue);
-            if (count($parts) !== 3) {
-                echo json_encode(['success' => 0, 'msg' => 'Invalid customerCode search value']);
-                return;
-            }
-            $customerCode = $parts[0];
-            $startDate = $parts[1];
-            $endDate = $parts[2];
+    $conditions = [];
+    $params = [];
 
-            $sql = "SELECT * FROM all_2oaoi
-                    WHERE SUBSTRING(Lot, 3, 2) = '$customerCode'
-                    AND Date_1 BETWEEN '$startDate' AND '$endDate'";
-        } else {
-            echo json_encode(['success' => 0, 'msg' => 'Invalid search type']);
-            return;
-        }
-
-        $result = mysqli_query($dbConn, $sql);
+    if (!empty($searchCriteria['lotNo'])) {
+        $conditions[] = "Lot LIKE ?";
+        $params[] = "%{$searchCriteria['lotNo']}%";
     }
 
-    if (mysqli_num_rows($result) > 0) {
+    if (!empty($searchCriteria['deviceId'])) {
+        $conditions[] = "Device_ID LIKE ?";
+        $params[] = "%{$searchCriteria['deviceId']}%";
+    }
+
+    if (!empty($searchCriteria['machineId'])) {
+        $conditions[] = "Machine_ID LIKE ?";
+        $params[] = "%{$searchCriteria['machineId']}%";
+    }
+
+    if (!empty($searchCriteria['customerCode'])) {
+        $conditions[] = "SUBSTRING(Lot, 3, 2) = ?";
+        $params[] = $searchCriteria['customerCode'];
+    }
+
+    if (!empty($searchCriteria['dateRange'])) {
+        $conditions[] = "Date_1 BETWEEN ? AND ?";
+        $params[] = $searchCriteria['dateRange'][0];
+        $params[] = $searchCriteria['dateRange'][1];
+    }
+
+    $whereClause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
+
+    $sql = "SELECT * FROM all_2oaoi $whereClause";
+
+    $stmt = mysqli_prepare($dbConn, $sql);
+    if ($params) {
+        mysqli_stmt_bind_param($stmt, str_repeat('s', count($params)), ...$params);
+    }
+
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    if ($result) {
         $products = mysqli_fetch_all($result, MYSQLI_ASSOC);
-        writeLog('getProductByCondition', 'Success');
-        echo json_encode(['success' => 1, 'products' => $products], JSON_UNESCAPED_UNICODE);
-    } else if (mysqli_num_rows($result) == 0) {
-        $products = [];
-        writeLog('getProductByCondition', 'No Data Found');
-        echo json_encode(['success' => 1, 'products' => $products], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['success' => 1, 'products' => $products]);
     } else {
-        writeLog('getProductByCondition', 'Failure');
-        echo json_encode(['success' => 0, 'msg' => 'getProductByCondition Search Product Failure']);
+        echo json_encode(['success' => 0, 'msg' => 'Search failed']);
     }
 }
 
