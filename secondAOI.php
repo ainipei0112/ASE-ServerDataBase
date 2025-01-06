@@ -31,34 +31,31 @@ switch ($action) {
     case 'userLogin':
         userLogin($data['userData']);
         break;
-    case 'getAIResults':
-        getAIResults($data['selectedCustomer'], $data['selectedMachine'], $data['selectedDateRange']);
-        break;
-    case 'getProductByCondition':
-        getProductByCondition($data['searchCriteria']);
-        break;
     case 'getVisitorCount':
         getVisitorCount();
         break;
     case 'getCustomerData':
         getCustomerData();
         break;
-        // case 'mailAlert':
-        //     mailAlert();
-        //     break;
-        // case 'uploadExcel':
-        //     uploadExcel();
-        //     break;
     case 'getCustomerDetails':
-        // getCustomerDetails($data['customerCode']);
         getCustomerDetails($data['customerCode'], $data['dateRange']);
+        break;
+    case 'getAIResults':
+        getAIResults($data['selectedCustomer'], $data['selectedMachine'], $data['selectedDateRange']);
+        break;
+    case 'getProductByCondition':
+        getProductByCondition($data['searchCriteria']);
+        break;
+    case 'getImageFiles':
+        $files = getImageFiles($data['lot'], $data['date'], $data['id']);
+        echo json_encode(['success' => 1, 'files' => $files]);
         break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
         break;
 }
 
-// LDAP登入
+// 前端 - LDAP登入
 function userLogin($userData) {
     // Active Directory 伺服器資訊
     $empId = $userData["empId"];
@@ -146,7 +143,7 @@ function userLogin($userData) {
     }
 }
 
-// 更新瀏覽人次
+// 前端 - 更新瀏覽人次
 function updateVisitorCount($empId) {
     global $dbConn;
     $currentDate = date('Y-m-d');
@@ -185,7 +182,7 @@ function updateVisitorCount($empId) {
     }
 }
 
-// 查詢瀏覽人次
+// 前端 - 查詢瀏覽人次
 function getVisitorCount() {
     global $dbConn;
 
@@ -198,6 +195,79 @@ function getVisitorCount() {
     echo json_encode(['success' => 1, 'count' => $count]);
 }
 
+// 後端 - 執行狀態紀錄
+function writeLog($action, $status) {
+    if (!defined('LOG_FILE_PATH')) {
+        define('LOG_FILE_PATH', '//10.11.33.122/D$/khwbpeaiaoi_Shares$/K18330/Log/2OAOI/');
+    }
+    $currentDate = date('Y-m-d');
+    $currentTime = date('H:i:s');
+    $logFile = LOG_FILE_PATH  . $currentDate . '.txt'; // 使用 UNC 路徑
+    $userIP = "[IP：" . $_SERVER['REMOTE_ADDR'] . "->";
+    $logMessage = "$currentTime] $action $status " . PHP_EOL;
+    file_put_contents($logFile, $userIP . $logMessage, FILE_APPEND);
+}
+
+// Summary - 取得所有客戶名稱 & Yield目標值
+function getCustomerData() {
+    global $dbConn;
+
+    $sql = "SELECT * FROM customer_data ";
+    $allcustomers = mysqli_query($dbConn, $sql);
+
+    if (mysqli_num_rows($allcustomers) > 0) {
+        $all_customers = mysqli_fetch_all($allcustomers, MYSQLI_ASSOC);
+        writeLog('getCustomerData', 'Success');
+        echo json_encode(['success' => 1, 'datas' => $all_customers]);
+    } else if (mysqli_num_rows($allcustomers) == 0) {
+        $all_customers = mysqli_fetch_all($allcustomers, MYSQLI_ASSOC);
+        writeLog('getCustomerData', 'No Data Found');
+        echo json_encode(['success' => 1, 'datas' => $all_customers]);
+    } else {
+        writeLog('getCustomerData', 'Failure');
+        echo json_encode(['success' => 0, 'msg' => 'getCustomerData Failure']);
+    }
+}
+
+// Summary - 取得客戶作貨資料
+function getCustomerDetails($customerCode, $dateRange = null) {
+    global $dbConn;
+
+    $start_date = $dateRange ? $dateRange[0] : date('Y-m-d', strtotime('-1 day'));
+    $end_date = $dateRange ? $dateRange[1] : date('Y-m-d', strtotime('-1 day'));
+
+    $sql =
+        "SELECT
+        a.Date_1 as Date,
+        a.Lot,
+        a.Device_ID,
+        SUM(a.AOI_Scan_Amount) as AOI_Scan_Amount,  -- 將 AOI_Scan_Amount 加總
+        SUM(a.Final_Pass_Amount) as Final_Pass_Amount,  -- 將 Final_Pass_Amount 加總
+        SUM(a.AOI_Scan_Amount) - SUM(a.Final_Pass_Amount) as Actual_Deduction, -- 計算實際扣量數
+        AVG(a.Final_Yield) as Final_Yield,  -- 將 Final_Yield 平均
+        a.Machine_ID,
+        c.Final_Yield_Goal as Yield_Goal
+    FROM all_2oaoi a
+    LEFT JOIN customer_data c ON SUBSTRING(a.Lot, 3, 2) = c.Customer_Code
+    WHERE SUBSTRING(a.Lot, 3, 2) = ?
+    AND a.Date_1 BETWEEN ? AND ?  -- 若無日期選擇就只撈取昨天的資料
+    GROUP BY a.Date_1, a.Lot, a.Device_ID, a.Machine_ID, c.Final_Yield_Goal
+    ORDER BY a.Date_1 DESC, Final_Yield DESC, Actual_Deduction DESC";
+
+    $stmt = mysqli_prepare($dbConn, $sql);
+    mysqli_stmt_bind_param($stmt, "sss", $customerCode, $start_date, $end_date);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    if ($result) {
+        $details = mysqli_fetch_all($result, MYSQLI_ASSOC);
+        echo json_encode(['success' => 1, 'details' => $details]);
+    } else {
+        echo json_encode(['success' => 0, 'msg' => 'Failed to get customer details']);
+    }
+}
+
+// AI Result - 查詢條件
 function getAIResults($selectedCustomer, $selectedMachine, $selectedDateRange) {
     global $dbConn;
 
@@ -225,6 +295,7 @@ function getAIResults($selectedCustomer, $selectedMachine, $selectedDateRange) {
     }
 }
 
+// AOI產品資料 - 查詢條件
 function getProductByCondition($searchCriteria) {
     global $dbConn;
 
@@ -277,73 +348,32 @@ function getProductByCondition($searchCriteria) {
     }
 }
 
-function getCustomerData() {
-    global $dbConn;
+// AOI產品資料 - 彈窗照片
+function getImageFiles($lot, $date, $id) {
+    $formattedDate = date('mdY', strtotime($date));
+    $path = "//khwbpeaiaoi01/2451AOI$/WaferMapTemp/Image/$formattedDate/$lot/$lot.$id/";
+    $files = [];
 
-    $sql = "SELECT * FROM customer_data ";
-    $allcustomers = mysqli_query($dbConn, $sql);
-
-    if (mysqli_num_rows($allcustomers) > 0) {
-        $all_customers = mysqli_fetch_all($allcustomers, MYSQLI_ASSOC);
-        writeLog('getCustomerData', 'Success');
-        echo json_encode(['success' => 1, 'datas' => $all_customers]);
-    } else if (mysqli_num_rows($allcustomers) == 0) {
-        $all_customers = mysqli_fetch_all($allcustomers, MYSQLI_ASSOC);
-        writeLog('getCustomerData', 'No Data Found');
-        echo json_encode(['success' => 1, 'datas' => $all_customers]);
-    } else {
-        writeLog('getCustomerData', 'Failure');
-        echo json_encode(['success' => 0, 'msg' => 'getCustomerData Failure']);
+    if (is_dir($path)) {
+        $allFiles = scandir($path);
+        foreach ($allFiles as $file) {
+            if (strpos($file, 'WFR_NO_' . $id . '_KLA_') === 0) {
+                $displayName = substr($file, 0, strpos($file, '_DIEX_')); // 只取到 KLA_N 的部分
+                $files[] = [
+                    'fullPath' => $path . $file,
+                    'displayName' => $displayName
+                ];
+            }
+        }
+        // 根據 KLA 編號排序
+        usort($files, function ($a, $b) {
+            preg_match('/KLA_(\d+)/', $a['displayName'], $matchesA);
+            preg_match('/KLA_(\d+)/', $b['displayName'], $matchesB);
+            return $matchesA[1] - $matchesB[1];
+        });
     }
-}
 
-function getCustomerDetails($customerCode, $dateRange = null) {
-    global $dbConn;
-
-    $start_date = $dateRange ? $dateRange[0] : date('Y-m-d', strtotime('-1 day'));
-    $end_date = $dateRange ? $dateRange[1] : date('Y-m-d', strtotime('-1 day'));
-
-    $sql =
-        "SELECT
-        a.Date_1 as Date,
-        a.Lot,
-        a.Device_ID,
-        SUM(a.AOI_Scan_Amount) as AOI_Scan_Amount,  -- 將 AOI_Scan_Amount 加總
-        SUM(a.Final_Pass_Amount) as Final_Pass_Amount,  -- 將 Final_Pass_Amount 加總
-        SUM(a.AOI_Scan_Amount) - SUM(a.Final_Pass_Amount) as Actual_Deduction, -- 計算實際扣量數
-        AVG(a.Final_Yield) as Final_Yield,  -- 將 Final_Yield 平均
-        a.Machine_ID,
-        c.Final_Yield_Goal as Yield_Goal
-    FROM all_2oaoi a
-    LEFT JOIN customer_data c ON SUBSTRING(a.Lot, 3, 2) = c.Customer_Code
-    WHERE SUBSTRING(a.Lot, 3, 2) = ?
-    AND a.Date_1 BETWEEN ? AND ?  -- 若無日期選擇就只撈取昨天的資料
-    GROUP BY a.Date_1, a.Lot, a.Device_ID, a.Machine_ID, c.Final_Yield_Goal
-    ORDER BY a.Date_1 DESC, Final_Yield DESC, Actual_Deduction DESC";
-
-    $stmt = mysqli_prepare($dbConn, $sql);
-    mysqli_stmt_bind_param($stmt, "sss", $customerCode, $start_date, $end_date);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-
-    if ($result) {
-        $details = mysqli_fetch_all($result, MYSQLI_ASSOC);
-        echo json_encode(['success' => 1, 'details' => $details]);
-    } else {
-        echo json_encode(['success' => 0, 'msg' => 'Failed to get customer details']);
-    }
-}
-
-function writeLog($action, $status) {
-    if (!defined('LOG_FILE_PATH')) {
-        define('LOG_FILE_PATH', '//10.11.33.122/D$/khwbpeaiaoi_Shares$/K18330/Log/2OAOI/');
-    }
-    $currentDate = date('Y-m-d');
-    $currentTime = date('H:i:s');
-    $logFile = LOG_FILE_PATH  . $currentDate . '.txt'; // 使用 UNC 路徑
-    $userIP = "[IP：" . $_SERVER['REMOTE_ADDR'] . "->";
-    $logMessage = "$currentTime] $action $status " . PHP_EOL;
-    file_put_contents($logFile, $userIP . $logMessage, FILE_APPEND);
+    return $files;
 }
 
 // ----------abandon----------
