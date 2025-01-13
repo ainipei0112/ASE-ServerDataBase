@@ -351,16 +351,17 @@ function getProductByCondition($searchCriteria) {
 // AOI產品資料 - 彈窗照片
 function getImageFiles($lot, $date, $id) {
     $formattedDate = date('mdY', strtotime($date));
-    $path = "//khwbpeaiaoi01/2451AOI$/WaferMapTemp/Image/$formattedDate/$lot/$lot.$id/";
+    $localPath = "//khwbpeaiaoi01/2451AOI$/WaferMapTemp/Image/$formattedDate/$lot/$lot.$id/";
+    $webPrefix = "http://wbaoi.kh.asegroup.com/2oAoiImage/$formattedDate/$lot/$lot.$id/";
     $files = [];
 
-    if (is_dir($path)) {
-        $allFiles = scandir($path);
+    if (is_dir($localPath)) {
+        $allFiles = scandir($localPath);
         foreach ($allFiles as $file) {
             if (strpos($file, 'WFR_NO_' . $id . '_KLA_') === 0) {
                 $displayName = substr($file, 0, strpos($file, '_DIEX_')); // 只取到 KLA_N 的部分
                 $files[] = [
-                    'fullPath' => $path . $file,
+                    'fullPath' => $webPrefix . $file,
                     'displayName' => $displayName
                 ];
             }
