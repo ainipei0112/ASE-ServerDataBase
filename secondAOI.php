@@ -50,6 +50,9 @@ switch ($action) {
         $files = getImageFiles($data['lot'], $data['date'], $data['id']);
         echo json_encode(['success' => 1, 'files' => $files]);
         break;
+    case 'downloadAllImages':
+        downloadAllImages($data['lot'], $data['date'], $data['id']);
+        break;
     default:
         echo json_encode(['success' => 0, 'msg' => "無對應action: '$action'"]);
         break;
@@ -352,7 +355,7 @@ function getProductByCondition($searchCriteria) {
 function getImageFiles($lot, $date, $id) {
     $formattedDate = date('mdY', strtotime($date));
     $localPath = "//khwbpeaiaoi01/2451AOI$/WaferMapTemp/Image/$formattedDate/$lot/$lot.$id/";
-    $webPrefix = "http://wbaoi.kh.asegroup.com/2oAoiImage/$formattedDate/$lot/$lot.$id/";
+    $webPrefix = "//wbaoi.kh.asegroup.com/2oAoiImage/$formattedDate/$lot/$lot.$id/";
 
     // 讀取 JSON 檔案
     $jsonDate = date('Y-m-d', strtotime($date));
@@ -398,6 +401,92 @@ function getImageFiles($lot, $date, $id) {
     }
 
     return $files;
+}
+
+// AOI產品資料 - 下載壓縮照片
+function downloadAllImages($lot, $date, $id) {
+    $formattedDate = date('mdY', strtotime($date));
+    $localPath = "//khwbpeaiaoi01/2451AOI$/WaferMapTemp/Image/$formattedDate/$lot/$lot.$id/";
+
+    // 建立檔案暫存資料夾
+    $tempDir = "//10.11.33.122/d$/khwbpeaiaoi_Shares$/K18330/Web/Temp";
+    if (!is_dir($tempDir)) {
+        mkdir($tempDir, 0777, true);
+    }
+
+    $zipName = "{$lot}_{$id}_images.zip";
+    $zipPath = $tempDir . '/' . $zipName;
+
+    // 讀取 JSON 檔案
+    $jsonDate = date('Y-m-d', strtotime($date));
+    $jsonPath = "//khwbpeaiaoi01/2451AOI$/WaferMapTemp/AI_Result/$jsonDate/$lot/$lot.$id.json";
+
+    if (!is_dir($localPath)) {
+        echo json_encode(['success' => 0, 'msg' => '找不到照片目錄']);
+        return;
+    }
+
+    if (!file_exists($jsonPath)) {
+        echo json_encode(['success' => 0, 'msg' => '找不到 JSON 檔案']);
+        return;
+    }
+
+    $jsonContent = file_get_contents($jsonPath);
+    $jsonData = json_decode($jsonContent, true);
+    $allowedFiles = [];
+
+    if (isset($jsonData['OP_FailDetails'])) {
+        foreach ($jsonData['OP_FailDetails'] as $detail) {
+            $allowedFiles[] = $detail['fileName'];
+        }
+    }
+
+    if (empty($allowedFiles)) {
+        echo json_encode(['success' => 0, 'msg' => '沒有可下載的檔案']);
+        return;
+    }
+    // 創建壓縮檔
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+        echo json_encode(['success' => 0, 'msg' => '無法創建 ZIP 檔案']);
+        return;
+    }
+
+    // 放入檔案到 ZIP
+    $fileCount = 0;
+    foreach ($allowedFiles as $file) {
+        $filePath = $localPath . $file;
+        if (file_exists($filePath)) {
+            $fileContent = file_get_contents($filePath);
+            if ($zip->addFromString($file, $fileContent)) {
+                $fileCount++;
+            }
+        }
+    }
+
+    $zip->close();
+
+    if ($fileCount === 0 || !file_exists($zipPath) || filesize($zipPath) === 0) {
+        if (file_exists($zipPath)) {
+            unlink($zipPath);
+        }
+        echo json_encode(['success' => 0, 'msg' => 'ZIP 檔案創建失敗']);
+        return;
+    }
+
+    // 輸出檔案
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="' . $zipName . '"');
+    header('Content-Length: ' . filesize($zipPath));
+    header('Cache-Control: no-cache, must-revalidate');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    ob_clean();
+    flush();
+    readfile($zipPath);
+    unlink($zipPath);
+    exit;
 }
 
 // ----------abandon----------
