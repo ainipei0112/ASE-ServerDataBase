@@ -353,25 +353,48 @@ function getImageFiles($lot, $date, $id) {
     $formattedDate = date('mdY', strtotime($date));
     $localPath = "//khwbpeaiaoi01/2451AOI$/WaferMapTemp/Image/$formattedDate/$lot/$lot.$id/";
     $webPrefix = "http://wbaoi.kh.asegroup.com/2oAoiImage/$formattedDate/$lot/$lot.$id/";
+
+    // 讀取 JSON 檔案
+    $jsonDate = date('Y-m-d', strtotime($date));
+    $jsonPath = "//khwbpeaiaoi01/2451AOI$/WaferMapTemp/AI_Result/$jsonDate/$lot/$lot.$id.json";
+
     $files = [];
 
-    if (is_dir($localPath)) {
-        $allFiles = scandir($localPath);
-        foreach ($allFiles as $file) {
-            if (strpos($file, 'WFR_NO_' . $id . '_KLA_') === 0) {
-                $displayName = substr($file, 0, strpos($file, '_DIEX_')); // 只取到 KLA_N 的部分
-                $files[] = [
-                    'fullPath' => $webPrefix . $file,
-                    'displayName' => $displayName
-                ];
+    // 確認 JSON 檔案存在且可讀取
+    if (file_exists($jsonPath)) {
+        $jsonContent = file_get_contents($jsonPath);
+        $jsonData = json_decode($jsonContent, true);
+
+        // 建立允許的檔案名稱清單
+        $allowedFiles = [];
+        if (isset($jsonData['OP_FailDetails'])) {
+            foreach ($jsonData['OP_FailDetails'] as $detail) {
+                $allowedFiles[] = $detail['fileName'];
             }
         }
-        // 根據 KLA 編號排序
-        usort($files, function ($a, $b) {
-            preg_match('/KLA_(\d+)/', $a['displayName'], $matchesA);
-            preg_match('/KLA_(\d+)/', $b['displayName'], $matchesB);
-            return $matchesA[1] - $matchesB[1];
-        });
+
+        // 檢查目錄是否存在
+        if (is_dir($localPath)) {
+            $allFiles = scandir($localPath);
+
+            foreach ($allFiles as $file) {
+                // 只處理在 JSON 中列出的檔案
+                if (in_array($file, $allowedFiles)) {
+                    $displayName = substr($file, 0, strpos($file, '_DIEX_')); // 只取到 KLA_N 的部分
+                    $files[] = [
+                        'fullPath' => $webPrefix . $file,
+                        'displayName' => $displayName
+                    ];
+                }
+            }
+
+            // 根據 KLA 編號排序
+            usort($files, function ($a, $b) {
+                preg_match('/KLA_(\d+)/', $a['displayName'], $matchesA);
+                preg_match('/KLA_(\d+)/', $b['displayName'], $matchesB);
+                return $matchesA[1] - $matchesB[1];
+            });
+        }
     }
 
     return $files;
